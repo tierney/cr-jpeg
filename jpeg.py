@@ -27,7 +27,7 @@ import numpy
 from numpy import pi
 from math import cos,sqrt
 
-def two_dim_DCT(X):
+def two_dim_DCT(X, forward=True):
   """2D Discrete Cosine Transform
   X should be square 2 dimensional array
   Trying to follow:
@@ -63,10 +63,16 @@ sub_result = sum(X[n1,n2]*cos(a1*k1)*cos(a2*k2) for (n1,n2,a1,a2) in precomputed
 
   for (k1,k2), _ in numpy.ndenumerate(X):
     sub_result = 0.
-    for n1 in range(N1):
-      for n2 in range(N2):
-        sub_result += X[n1,n2] * cos((pi/8.)*(n1+.5)*k1)*cos((pi/8.)*(n2+.5)*k2)
-    result[k1,k2] = alpha(k1) * alpha(k2) * sub_result
+    if not forward:
+      for n1 in range(N1):
+        for n2 in range(N2):
+          sub_result += alpha(n1) * alpha(n2) * X[n1,n2] * cos((pi/N1)*(k1+.5)*n1)*cos((pi/N2)*(k2+.5)*n2)
+      result[k1,k2] = sub_result
+    else:
+      for n1 in range(N1):
+        for n2 in range(N2):
+          sub_result += X[n1,n2] * cos((pi/N1)*(n1+.5)*k1)*cos((pi/N2)*(n2+.5)*k2)
+      result[k1,k2] = alpha(k1) * alpha(k2) * sub_result
   return result
 
 def jpeg_quality_scaling(quality):
@@ -87,11 +93,11 @@ def jpeg_quality_scaling(quality):
 #   print i, jpeg_quality_scaling(i)
 
 
-# import random
-# mat = numpy.zeros((8,8))
-# for row in range(8):
-#   for col in range(8):
-#     mat[row,col] = random.randint(0, 255)
+import random
+mat = numpy.zeros((8,8))
+for row in range(8):
+  for col in range(8):
+    mat[row,col] = random.randint(0, 255)
 
 mat_wiki = [[52, 55, 61, 66, 70, 61, 64, 73],
             [63, 59, 55, 90, 109, 85, 69, 72],
@@ -101,14 +107,21 @@ mat_wiki = [[52, 55, 61, 66, 70, 61, 64, 73],
             [79, 65, 60, 70, 77, 68, 58, 75],
             [85, 71, 64, 59, 55, 61, 65, 83],
             [87, 79, 69, 68, 65, 76, 78, 94]]
-
 mat = numpy.array(mat_wiki)
+print "Original"
+for row in range(8):
+  for col in range(8):
+    print '%4d' % mat[row, col],
+  print ''
+print
+
+
 # Shift for [-128, 127]
 mat -= 128
 
 for row in range(8):
   for col in range(8):
-    print '%8.2f' % mat[row, col],
+    print '%4d' % mat[row, col],
   print ''
 print
 
@@ -125,7 +138,51 @@ for i, quant in enumerate(std_luminance_quant_tbl):
   col = i % 8
   quantized_mat[row, col] = round(dct_mat[row, col] / float(quant))
 
+print 'Quantized Luminance'
 for row in range(8):
   for col in range(8):
     print '%3d' % quantized_mat[row, col],
   print ''
+print
+
+
+dequantized_mat = numpy.zeros((8,8))
+for i, quant in enumerate(std_luminance_quant_tbl):
+  row = i / 8
+  col = i % 8
+  dequantized_mat[row, col] = quantized_mat[row, col] * quant
+
+print 'Dequantized'
+for row in range(8):
+  for col in range(8):
+    print '%4d' % dequantized_mat[row, col],
+  print ''
+print
+
+
+idct_mat = two_dim_DCT(dequantized_mat, False)
+print 'IDCT of Dequantized'
+for row in range(8):
+  for col in range(8):
+    print '%4d' % round(idct_mat[row, col]),
+  print ''
+print
+
+idct_mat += 128
+for row in range(8):
+  for col in range(8):
+    print '%4d' % round(idct_mat[row, col]),
+  print ''
+print
+
+# quantized_mat = numpy.zeros((8,8))
+# for i, quant in enumerate(chrominance):
+#   row = i / 8
+#   col = i % 8
+#   quantized_mat[row, col] = round(dct_mat[row, col] / float(quant))
+
+# print 'Chrominance'
+# for row in range(8):
+#   for col in range(8):
+#     print '%3d' % quantized_mat[row, col],
+#   print ''
