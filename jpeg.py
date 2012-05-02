@@ -94,10 +94,26 @@ def jpeg_quality_scaling(quality):
 
 
 import random
+thresholds = { # Well, nine (we add one for "black").
+  '0': 238,
+  '1': 210,
+  '2': 182,
+  '3': 154,
+  '4': 126,
+  '5': 98,
+  '6': 70,
+  '7': 42,
+  '8': 14,
+  }
+
+from main import ColorSpace
+
 mat = numpy.zeros((8,8))
-for row in range(8):
-  for col in range(8):
-    mat[row,col] = random.randint(0, 255)
+for row in range(0, 8, 1):
+  for col in range(0, 8, 1):
+    red = green = blue = thresholds[str(random.randint(0, 7))]
+    y, cb, cr = ColorSpace.to_ycc(red, green, blue)
+    mat[row,col] = float(y)
 
 mat_wiki = [[52, 55, 61, 66, 70, 61, 64, 73],
             [63, 59, 55, 90, 109, 85, 69, 72],
@@ -107,17 +123,19 @@ mat_wiki = [[52, 55, 61, 66, 70, 61, 64, 73],
             [79, 65, 60, 70, 77, 68, 58, 75],
             [85, 71, 64, 59, 55, 61, 65, 83],
             [87, 79, 69, 68, 65, 76, 78, 94]]
-mat = numpy.array(mat_wiki)
+
+#orig_mat = numpy.array(mat_wiki)
+orig_mat = mat
 print "Original"
 for row in range(8):
   for col in range(8):
-    print '%4d' % mat[row, col],
+    print '%5.1f' % orig_mat[row, col],
   print ''
 print
 
 
 # Shift for [-128, 127]
-mat -= 128
+mat = orig_mat - 128
 
 for row in range(8):
   for col in range(8):
@@ -132,16 +150,18 @@ for row in range(8):
   print ''
 print
 
+quality_scaling = jpeg_quality_scaling(95)
 quantized_mat = numpy.zeros((8,8))
 for i, quant in enumerate(std_luminance_quant_tbl):
   row = i / 8
   col = i % 8
-  quantized_mat[row, col] = round(dct_mat[row, col] / float(quant))
+  quantized_mat[row, col] = \
+      round(dct_mat[row, col] / ((quality_scaling * float(quant) + 50.) / 100.))
 
 print 'Quantized Luminance'
 for row in range(8):
   for col in range(8):
-    print '%3d' % quantized_mat[row, col],
+    print '%5.1f' % quantized_mat[row, col],
   print ''
 print
 
@@ -150,7 +170,8 @@ dequantized_mat = numpy.zeros((8,8))
 for i, quant in enumerate(std_luminance_quant_tbl):
   row = i / 8
   col = i % 8
-  dequantized_mat[row, col] = quantized_mat[row, col] * quant
+  dequantized_mat[row, col] = \
+      quantized_mat[row, col] * (quant * quality_scaling + 50.) / 100.
 
 print 'Dequantized'
 for row in range(8):
@@ -168,13 +189,29 @@ for row in range(8):
   print ''
 print
 
+recovered_mat = numpy.zeros((8,8))
 idct_mat += 128
 for row in range(8):
   for col in range(8):
     print '%4d' % round(idct_mat[row, col]),
+    recovered_mat[row, col] = round(idct_mat[row, col])
   print ''
 print
 
+# print recovered_mat
+
+error = numpy.zeros((8,8))
+avg_errors = 0.
+for row in range(8):
+  for col in range(8):
+    avg_errors += abs(recovered_mat[row, col] - orig_mat[row, col])
+    error[row, col] = recovered_mat[row, col] - orig_mat[row, col]
+
+print avg_errors / 64
+for row in range(8):
+  for col in range(8):
+    print '%4d' % error[row, col],
+  print
 # quantized_mat = numpy.zeros((8,8))
 # for i, quant in enumerate(chrominance):
 #   row = i / 8
