@@ -11,7 +11,7 @@ std_luminance_quant_tbl = [
   72,  92,  95,  98, 112, 100, 103,  99
   ]
 
-chrominance = [
+std_chrominance_quant_tbl = [
   17,  18,  24,  47,  99,  99,  99,  99,
   18,  21,  26,  66,  99,  99,  99,  99,
   24,  26,  56,  99,  99,  99,  99,  99,
@@ -21,6 +21,11 @@ chrominance = [
   99,  99,  99,  99,  99,  99,  99,  99,
   99,  99,  99,  99,  99,  99,  99,  99
   ]
+
+_QUANT_TABLE = std_luminance_quant_tbl
+
+_QUALITY = 72
+_PIL_QUALITY = 72
 
 import numpy
 #shortcuts
@@ -33,24 +38,26 @@ def two_dim_DCT(X, forward=True):
   Trying to follow:
 
   http://en.wikipedia.org/wiki/Discrete_cosine_transform#Multidimensional_DCTs
-
   http://en.wikipedia.org/wiki/JPEG#Discrete_cosine_transform
 
-precomputed = [(n1,n2, pi/N1*(n1+.5), pi/N2*(n2+0.5))
-for n1 in range(N1) for n2 in range(N2)]
+  TODO(tierney): Include precomputed results.
 
-and then your main loop is more like
+  precomputed = [(n1,n2, pi/N1*(n1+.5), pi/N2*(n2+0.5))
+                 for n1 in range(N1) for n2 in range(N2)]
 
-for (k1,k2),_ in numpy.ndenumerate(X):
-sub_result=0.
-for n1, n2, a1, a2 in precomputed:
-sub_result+=X[n1,n2] * cos(a1*k1) * cos(a2*k2)
-result[k1,k2]=alpha(k1)*alpha(k2)*sub_result
+  and then your main loop is more like
 
-you might even find that
+  for (k1,k2),_ in numpy.ndenumerate(X):
+    sub_result=0.
+    for n1, n2, a1, a2 in precomputed:
+      sub_result+=X[n1,n2] * cos(a1*k1) * cos(a2*k2)
+    result[k1,k2] = alpha(k1) * alpha(k2) * sub_result
 
-sub_result = sum(X[n1,n2]*cos(a1*k1)*cos(a2*k2) for (n1,n2,a1,a2) in precomputed)
-"""
+  you might even find that
+
+  sub_result = sum(X[n1,n2]*cos(a1*k1)*cos(a2*k2) for
+                   (n1,n2,a1,a2) in precomputed)"""
+
   result = numpy.zeros(X.shape)
   N1,N2 = X.shape
 
@@ -66,16 +73,19 @@ sub_result = sum(X[n1,n2]*cos(a1*k1)*cos(a2*k2) for (n1,n2,a1,a2) in precomputed
     if not forward:
       for n1 in range(N1):
         for n2 in range(N2):
-          sub_result += alpha(n1) * alpha(n2) * X[n1,n2] * cos((pi/N1)*(k1+.5)*n1)*cos((pi/N2)*(k2+.5)*n2)
+          sub_result += alpha(n1) * alpha(n2) * X[n1,n2] * \
+              cos((pi/N1)*(k1+.5)*n1) * cos((pi/N2)*(k2+.5)*n2)
       result[k1,k2] = sub_result
     else:
       for n1 in range(N1):
         for n2 in range(N2):
-          sub_result += X[n1,n2] * cos((pi/N1)*(n1+.5)*k1)*cos((pi/N2)*(n2+.5)*k2)
+          sub_result += X[n1,n2] * cos((pi/N1)*(n1+.5)*k1) * \
+              cos((pi/N2)*(n2+.5)*k2)
       result[k1,k2] = alpha(k1) * alpha(k2) * sub_result
   return result
 
-def jpeg_quality_scaling(quality):
+
+def jpeg_scale_factor(quality):
   # From jcparams.c:123
   if quality <= 0:
     quality = 1
@@ -89,10 +99,6 @@ def jpeg_quality_scaling(quality):
 
   return quality
 
-# for i in range(0, 101):
-#   print i, jpeg_quality_scaling(i)
-
-
 import random
 thresholds = { # Well, nine (we add one for "black").
   '0': 238,
@@ -105,15 +111,61 @@ thresholds = { # Well, nine (we add one for "black").
   '7': 42,
   '8': 14,
   }
+_inv_thresholds = dict((v,k) for k, v in thresholds.iteritems())
 
 from main import ColorSpace
 
+b64_alphabet = \
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+message = ''
+message_base8 = ''
+indices = []
+values = []
+for i in range(32):
+  idx = random.randint(0,63)
+  message += b64_alphabet[idx]
+  indices.append(idx)
+  octal_val = '%02s' % oct(idx)[1:]
+  message_base8 += octal_val.replace(' ','0')
+
+print message
+print message_base8, len(message_base8)
+print indices
+
 mat = numpy.zeros((8,8))
+img_buffer = []
+print 'Original RGB'
 for row in range(0, 8, 1):
   for col in range(0, 8, 1):
-    red = green = blue = thresholds[str(random.randint(0, 7))]
+    value = thresholds[message_base8[row*8 + col]]
+    red = green = blue = value
+    print '%5.1f' % value,
     y, cb, cr = ColorSpace.to_ycc(red, green, blue)
     mat[row,col] = float(y)
+    img_buffer.append(int(y))
+    # mat[row+1,col] = float(y)
+    # mat[row,col+1] = float(y)
+    # mat[row+1,col+1] = float(y)
+  print
+print
+
+import Image
+print str(img_buffer)
+im = Image.new('RGB', (16,16))
+pixels = im.load()
+for i in range(0, 16, 2):
+  for j in range(0, 16, 2):
+    rgb = (img_buffer[i*8 + j],
+           img_buffer[i*16 + j],
+           img_buffer[i*16 + j])
+
+    pixels[i,j] = rgb
+    pixels[i+1,j] = rgb
+    pixels[i,j+1] = rgb
+    pixels[i+1,j+1] = rgb
+
+im.save('test.jpg', quality=_PIL_QUALITY)
 
 mat_wiki = [[52, 55, 61, 66, 70, 61, 64, 73],
             [63, 59, 55, 90, 109, 85, 69, 72],
@@ -124,9 +176,9 @@ mat_wiki = [[52, 55, 61, 66, 70, 61, 64, 73],
             [85, 71, 64, 59, 55, 61, 65, 83],
             [87, 79, 69, 68, 65, 76, 78, 94]]
 
-#orig_mat = numpy.array(mat_wiki)
+# orig_mat = numpy.array(mat_wiki)
 orig_mat = mat
-print "Original"
+print "Color space converted original."
 for row in range(8):
   for col in range(8):
     print '%5.1f' % orig_mat[row, col],
@@ -150,16 +202,27 @@ for row in range(8):
   print ''
 print
 
-quality_scaling = jpeg_quality_scaling(95)
+scale_factor = jpeg_scale_factor(_QUALITY)
+
+print scale_factor
 quantized_mat = numpy.zeros((8,8))
-for i, quant in enumerate(std_luminance_quant_tbl):
+for i, quant in enumerate(_QUANT_TABLE):
   row = i / 8
   col = i % 8
 
-  temp = ((quality_scaling * float(quant) + 50.) / 100.)
-  if temp <= 0: temp = 1
-  if temp > 32767: temp = 32767
-  if temp > 255: temp = 255 # TODO(tierney): If forcing baseline.
+  # temp = float(quant)
+  temp = ((scale_factor * float(quant) + 50.) / 100.)
+  if temp <= 0:
+    print 'forcing positive'
+    temp = 1.
+
+  if temp > 32767:
+    print 'forcing trim'
+    temp = 32767.
+  if temp > 255:
+    print 'forcing baseline'
+    temp = 255. # TODO(tierney): If forcing baseline.
+
   quantized_mat[row, col] = \
       round(dct_mat[row, col] / float(temp))
 
@@ -172,11 +235,14 @@ print
 
 
 dequantized_mat = numpy.zeros((8,8))
-for i, quant in enumerate(std_luminance_quant_tbl):
+for i, quant in enumerate(_QUANT_TABLE):
   row = i / 8
   col = i % 8
+
+  # temp = float(quant)
+  temp = (quant * scale_factor + 50.) / 100.
   dequantized_mat[row, col] = \
-      quantized_mat[row, col] * (quant * quality_scaling + 50.) / 100.
+      quantized_mat[row, col] * temp
 
 print 'Dequantized'
 for row in range(8):
@@ -196,12 +262,54 @@ print
 
 recovered_mat = numpy.zeros((8,8))
 idct_mat += 128
+from util import bsearch
+
+_inv_keys = sorted(_inv_thresholds.keys())
+ret = []
+print 'Recovered Matrix'
 for row in range(8):
   for col in range(8):
-    print '%4d' % round(idct_mat[row, col]),
-    recovered_mat[row, col] = round(idct_mat[row, col])
+    recovered_val = round(idct_mat[row, col])
+    ret.append(int(_inv_thresholds[
+          _inv_keys[bsearch(_inv_keys, recovered_val)]]))
+    print '%4d' % recovered_val,
+    recovered_mat[row, col] = recovered_val
   print ''
 print
+
+
+recovered_image = Image.open('test.jpg')
+recovered_pixels = recovered_image.load()
+recovered_img_ret = []
+print
+print 'Recovered Image Real'
+for i in range(8):
+  for j in range(8):
+    print '%4d' % recovered_pixels[i,j][0],
+    recovered_val = recovered_pixels[i,j][0]
+    recovered_img_ret.append(int(_inv_thresholds[
+          _inv_keys[bsearch(_inv_keys, recovered_val)]]))
+  print
+
+recovered_img_message = ''.join([str(i) for i in recovered_img_ret])
+print 'Recovered img'
+print recovered_img_message
+errors = [abs(int(message_base8[i]) - int(recovered_img_message[i]))
+          for i in range(64)]
+print ''.join([str(i) for i in errors])
+num_errors = sum([errors[i] for i in range(64)])
+print num_errors
+print
+
+print 'Recovered libjpeg'
+recovered_message = ''.join([str(i) for i in ret])
+print message_base8
+print recovered_message
+errors = [abs(int(message_base8[i]) - int(recovered_message[i]))
+          for i in range(64)]
+print ''.join([str(i) for i in errors])
+num_errors = sum([errors[i] for i in range(64)])
+print num_errors
 
 # print recovered_mat
 
@@ -209,22 +317,11 @@ error = numpy.zeros((8,8))
 avg_errors = 0.
 for row in range(8):
   for col in range(8):
-    avg_errors += abs(recovered_mat[row, col] - orig_mat[row, col])
-    error[row, col] = recovered_mat[row, col] - orig_mat[row, col]
+    avg_errors += abs(orig_mat[row, col] - recovered_mat[row, col])
+    error[row, col] = orig_mat[row, col] - recovered_mat[row, col]
 
 print avg_errors / 64
 for row in range(8):
   for col in range(8):
     print '%4d' % error[row, col],
   print
-# quantized_mat = numpy.zeros((8,8))
-# for i, quant in enumerate(chrominance):
-#   row = i / 8
-#   col = i % 8
-#   quantized_mat[row, col] = round(dct_mat[row, col] / float(quant))
-
-# print 'Chrominance'
-# for row in range(8):
-#   for col in range(8):
-#     print '%3d' % quantized_mat[row, col],
-#   print ''
