@@ -155,8 +155,13 @@ quantized_mat = numpy.zeros((8,8))
 for i, quant in enumerate(std_luminance_quant_tbl):
   row = i / 8
   col = i % 8
+
+  temp = ((quality_scaling * float(quant) + 50.) / 100.)
+  if temp <= 0: temp = 1
+  if temp > 32767: temp = 32767
+  if temp > 255: temp = 255 # TODO(tierney): If forcing baseline.
   quantized_mat[row, col] = \
-      round(dct_mat[row, col] / ((quality_scaling * float(quant) + 50.) / 100.))
+      round(dct_mat[row, col] / float(temp))
 
 print 'Quantized Luminance'
 for row in range(8):
