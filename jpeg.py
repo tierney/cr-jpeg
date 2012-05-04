@@ -25,7 +25,7 @@ std_chrominance_quant_tbl = [
 _QUANT_TABLE = std_luminance_quant_tbl
 
 _QUALITY = 72
-_PIL_QUALITY = 72
+_PIL_QUALITY = _QUALITY
 
 import numpy
 #shortcuts
@@ -135,6 +135,7 @@ print indices
 
 mat = numpy.zeros((8,8))
 img_buffer = []
+
 print 'Original RGB'
 for row in range(0, 8, 1):
   for col in range(0, 8, 1):
@@ -150,20 +151,26 @@ for row in range(0, 8, 1):
   print
 print
 
-import Image
+from PIL import Image
 print str(img_buffer)
 im = Image.new('RGB', (16,16))
 pixels = im.load()
-for i in range(0, 16, 2):
-  for j in range(0, 16, 2):
-    rgb = (img_buffer[i*8 + j],
-           img_buffer[i*16 + j],
-           img_buffer[i*16 + j])
+# for i in range(0, 16, 2):
+#   for j in range(0, 16, 2):
+#     rgb = (img_buffer[(i/2)*8 + (j/2)],
+#            img_buffer[(i/2)*8 + (j/2)],
+#            img_buffer[(i/2)*8 + (j/2)])
+#     pixels[i,j] = rgb
+#     pixels[i+1,j] = rgb
+#     pixels[i,j+1] = rgb
+#     pixels[i+1,j+1] = rgb
 
+for i in range(0, 8, 1):
+  for j in range(0, 8, 1):
+    rgb = (img_buffer[(i)*8 + (j)],
+           img_buffer[(i)*8 + (j)],
+           img_buffer[(i)*8 + (j)])
     pixels[i,j] = rgb
-    pixels[i+1,j] = rgb
-    pixels[i,j+1] = rgb
-    pixels[i+1,j+1] = rgb
 
 im.save('test.jpg', quality=_PIL_QUALITY)
 
@@ -278,15 +285,29 @@ for row in range(8):
 print
 
 
+# Recover the real image that was written.
 recovered_image = Image.open('test.jpg')
 recovered_pixels = recovered_image.load()
 recovered_img_ret = []
 print
 print 'Recovered Image Real'
-for i in range(8):
-  for j in range(8):
-    print '%4d' % recovered_pixels[i,j][0],
-    recovered_val = recovered_pixels[i,j][0]
+# for i in range(0, 16, 2):
+#   for j in range(0, 16, 2):
+#     avg = 0.
+#     for x, y in [(0,0), (0,1), (1,0), (1,1)]:
+#       avg += recovered_pixels[i + x,j + y][0]
+#     recovered_val = avg / 4.
+#     print '%6.1f' % recovered_val,
+#     recovered_img_ret.append(int(_inv_thresholds[
+#           _inv_keys[bsearch(_inv_keys, recovered_val)]]))
+#   print
+for i in range(0, 8, 1):
+  for j in range(0, 8, 1):
+    avg = 0.
+    for x, y in [(0,0)]:
+      avg += recovered_pixels[i + x,j + y][0]
+    recovered_val = avg / 1.
+    print '%6.1f' % recovered_val,
     recovered_img_ret.append(int(_inv_thresholds[
           _inv_keys[bsearch(_inv_keys, recovered_val)]]))
   print
