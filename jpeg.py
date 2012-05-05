@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 from dct import two_dim_DCT
+import numpy
+
 std_luminance_quant_tbl = [
   16,  11,  10,  16,  24,  40,  51,  61,
   12,  12,  14,  19,  26,  58,  60,  55,
