@@ -40,6 +40,19 @@ def random_11_block(possible_values):
       matrix[i,j] = val
   return matrix
 
+def random_sb_block(possible_values):
+  matrix = zeros((8,8))
+  coords = [
+    [(0,0),(0,1),(1,0),(1,1),(2,0),(0,2)],
+    [(6,0),(6,1),(7,0),(7,1)],
+    [(0,6),(1,6),(0,7),(1,7)],
+    [(6,6),(7,6),(6,7),(7,7)]]
+  for coord_set in coords:
+    val = random.choice(possible_values)
+    for coord in coord_set:
+      matrix[coord] = val
+  return matrix
+
 def main(argv):
   # discretize_channel(9)
   # discretize_channel(10)
@@ -54,16 +67,31 @@ def main(argv):
 
   jpeg = JPEG()
   print
-  for quality in range(72, 96):
-    quantized = jpeg.scaled_luminance_quant_matrix(quality)
-    with open('quant_%d.log' % quality, 'w') as fh:
-      for row in range(8):
-        for col in range(8):
-          fh.write('%d %d %d\n' % (row, col, quantized[row,col]))
 
+  # For visualizing the quantization matrices.
+  #
+  # for quality in range(5, 96):
+  #   quantized = jpeg.scaled_luminance_quant_matrix(quality)
+  #   with open('quant_%s.log' % quality, 'w') as fh:
+  #     for row in range(8):
+  #       for col in range(8):
+  #         fh.write('%d %d %d\n' % (row, col, quantized[row,col]))
+
+  quantized = jpeg.luminance_quantize(dctd, 75)
+  print_8_by_8(quantized)
   print 'Dequanitzed'
-  print_8_by_8(jpeg.luminance_dequantize(quantized, 95))
-
+  dequantized = jpeg.luminance_dequantize(quantized, 75)
+  print_8_by_8(dequantized)
+  idctd = two_dim_DCT(dequantized, False)
+  print 'iDCT'
+  print_8_by_8(idctd)
+  print 'Diff'
+  print_8_by_8( idctd - rand_block)
+  print 'FS'
+  dithered = jpeg.fs_dither(idctd)
+  print_8_by_8(dithered)
+  print 'Diff Dither'
+  print_8_by_8( dithered - rand_block)
 
   # matrix = zeros((8,8))
   # print matrix

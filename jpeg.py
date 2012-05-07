@@ -58,7 +58,7 @@ thresholds = { # Well, nine (we add one for "black").
   }
 _inv_thresholds = dict((v,k) for k, v in thresholds.iteritems())
 
-from main import ColorSpace
+from ColorSpace import ColorSpace
 
 b64_alphabet = \
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
