@@ -12,7 +12,7 @@ class BitEncoder:
     map a k-length bit string to a DCT matrix
     """
     assert len(bits) == self.k
-    quantized_dct = np.zero_like(self.quant)
+    dct = np.zero_like(self.quant)
     for flat_idx in np.nonzero(self.bits_per_bin):
       b = self.bits_per_bin[flat_idx]
       substr = bits[curr_idx:curr_idx+b]
@@ -23,8 +23,8 @@ class BitEncoder:
       # the 2D index into quantization and DCT matrices
       idx = np.unravel_index(flat_idx, self.quant.shape)
       quantization_level = self.quant[idx]
-      quantized_dct[idx] = n * quantization_level
-    return quantized_dct
+      dct[idx] = n * quantization_level
+    return dct
 
 
 
