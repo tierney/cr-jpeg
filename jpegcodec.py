@@ -24,6 +24,7 @@ class JPEG(object):
       [99,  99,  99,  99,  99,  99,  99,  99],
       [99,  99,  99,  99,  99,  99,  99,  99]])
 
+
   @staticmethod
   def scale_factor(quality):
     # From jcparams.c:123
@@ -39,6 +40,7 @@ class JPEG(object):
 
     return quality
 
+
   def _scaled_quant_matrix(self, quality, std_quant_tbl):
     _quant_table = numpy.zeros((8,8))
     _scale_factor = self.scale_factor(quality)
@@ -53,17 +55,16 @@ class JPEG(object):
         if temp > 255:
           temp = 255. # TODO(tierney): If forcing baseline.
         _quant_table[row,col] = int(temp)
-    with open('quant.log','w') as fh:
-      for row in range(8):
-        for col in range(8):
-          fh.write('%d %d %d\n' % (row, col, _quant_table[row,col]))
     return _quant_table
+
 
   def scaled_luminance_quant_matrix(self, quality):
     return self._scaled_quant_matrix(quality, self._std_luminance_quant_tbl)
 
+
   def scaled_chrominance_quant_matrix(self, quality):
     return self._scaled_quant_matrix(quality, self._std_chrominance_quant_tbl)
+
 
   def luminance_quantize(self, dct_mat, quality):
     quant = self.scaled_luminance_quant_matrix(quality)
@@ -74,6 +75,7 @@ class JPEG(object):
         ret[row,col] = quant_val
     return ret
 
+
   def luminance_dequantize(self, dezz, quality):
     quant = self.scaled_luminance_quant_matrix(quality)
     print quant
@@ -82,6 +84,7 @@ class JPEG(object):
       for col in range(8):
         ret[row, col] = dezz[row,col] * quant[row,col]
     return ret
+
 
   def chrominance_quantize(self, dct_mat, quality):
     quant = self.scaled_chrominance_quant_matrix(quality)

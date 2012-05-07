@@ -54,9 +54,13 @@ def main(argv):
 
   jpeg = JPEG()
   print
-  quantized = jpeg.luminance_quantize(dctd, 95)
-  print 'Quantized'
-  print_8_by_8(quantized)
+  for quality in range(72, 96):
+    quantized = jpeg.scaled_luminance_quant_matrix(quality)
+    with open('quant_%d.log' % quality, 'w') as fh:
+      for row in range(8):
+        for col in range(8):
+          fh.write('%d %d %d\n' % (row, col, quantized[row,col]))
+
   print 'Dequanitzed'
   print_8_by_8(jpeg.luminance_dequantize(quantized, 95))
 
