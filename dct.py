@@ -95,7 +95,6 @@ def two_dim_DCT(X, forward=True):
   N1,N2 = X.shape
 
   def alpha(n):
-    """Normalizing function, not sure if necessary"""
     if n == 0:
       return 0.353553390593 #sqrt(1/8.)
     else:
