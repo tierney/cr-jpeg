@@ -5,6 +5,9 @@ from math import cos,sqrt
 from PIL import Image
 from ColorSpace import ColorSpace
 
+import numpy as np 
+from scipy.fftpack import dct 
+
 class DCT(object):
   # Example use:
   #   from dct import DCT
@@ -12,56 +15,67 @@ class DCT(object):
   #   ret = dct.get_dcts()
   def __init__(self, image_path):
     self.image_path = image_path
+    self.rgb_image = None
+    self.rgb_array = None
+    self.ycc_array = None
+    self.ycc_sub_images = None
 
-  def _decompose(self):
+  def _decompose_ycc(self, window_width = 8, window_height = 8):
     # Imperfectly grabs all of the 8x8 pixel blocks (will ignore edge blocks
     # that are smaller than 8x8).
-    im = Image.open(self.image_path)
-    width, height = im.size
+    
+    width, height,_ = self.ycc_array.shape
 
-    width_intevals = width / 8 # Leverage automatic floor-ing of divided ints.
-    height_intervals = height / 8
+    width_intevals = width / window_width # Leverage automatic floor-ing of divided ints.
+    height_intervals = height / window_height
 
     sub_images = []
+    im = self.ycc_array
     for height_interval in range(width_intevals):
-      row_sub_images = []
+      height_start = height_interval * window_height
+      height_end = height_start + window_height
       for width_interval in range(height_intervals):
-        box = (width_interval * 8, height_interval * 8,
-               (width_interval + 1) * 8, (height_interval + 1) * 8)
-        sub_image = im.crop(box)
-        pixels = numpy.array(sub_image)
-        row_sub_images.append(pixels)
-      sub_images.append(row_sub_images)
+        width_start = width_interval * window_width
+        width_end = width_start + window_width 
+        sub_image = im[height_start:height_end, width_start:width_end, :]
+        sub_images.append(sub_image)
     return sub_images
 
   def get_dcts(self):
-    color_space = ColorSpace()
-    sub_images = self._decompose()
+    if self.rgb_image is None:
+        self.rgb_image = Image.open(self.image_path)
+        self.rgb_array = np.asarray(self.rgb_image)
+
+    if self.ycc_array is None:
+        color_space = ColorSpace()
+        red = self.rgb_array[:,:,0]
+        green = self.rgb_array[:,:,1]
+        blue = self.rgb_array[:,:,2]
+        lum, cb, cr = color_space.to_ycc(red, green, blue)
+        x,y = lum.shape
+        self.ycc_array = np.zeros( (x,y,3), dtype=lum.dtype)
+        self.ycc_array[:,:,0] = lum
+        self.ycc_array[:,:,1] = cb
+        self.ycc_array[:,:,2] = cr
+        
+    if self.ycc_sub_images is None:
+        self.ycc_sub_images = self._decompose_ycc()
 
     ret_dcts = []
-    for sub_image_row in sub_images:
-      ret_dcts_row = []
-      for pixels in sub_image_row:
-        _lum_pixels = numpy.zeros((8,8))
-        _cb_pixels = numpy.zeros((8,8))
-        _cr_pixels = numpy.zeros((8,8))
-        for row in range(8):
-          for col in range(8):
-            red, green, blue = pixels[row,col]
-            lum, cr, cb = color_space.to_ycc(red, green, blue)
-            _lum_pixels[row,col] = lum
-            _cb_pixels[row,col] = cb
-            _cr_pixels[row,col] = cr
-
-        lum_dct = two_dim_DCT(_lum_pixels)
-        # TODO(tierney): Technically, need to subsample Cb and Cr before
-        # DCT. These Cb and Cr values should be treated as unrealistic until
-        # subsampling before the DCT step.
-        cb_dct = two_dim_DCT(_cb_pixels)
-        cr_dct = two_dim_DCT(_cr_pixels)
-
-        ret_dcts_row.append(lum_dct)
-      ret_dcts.append(ret_dcts_row)
+    for window in self.ycc_sub_images:
+      lum, _, _ = window[:, :, 0], window[:,:,1], window[:,:,2]
+         
+      # switched to scipy dct for performance 
+      lum_dct = dct(lum, type=2, norm='ortho' )
+      #lum_dct = two_dim_DCT(_lum_pixels)
+        
+    
+      # TODO(tierney): Technically, need to subsample Cb and Cr before
+      # DCT. These Cb and Cr values should be treated as unrealistic until
+      # subsampling before the DCT step.
+      #cb_dct = two_dim_DCT(_cb_pixels)
+      #cr_dct = two_dim_DCT(_cr_pixels)
+      ret_dcts.append(lum_dct)
     return numpy.array(ret_dcts)
 
 
@@ -107,10 +121,13 @@ def two_dim_DCT(X, forward=True):
         for n2 in range(N2):
           sub_result += alpha(n1) * alpha(n2) * X[n1,n2] * \
               cos((pi/N1)*(k1+.5)*n1) * cos((pi/N2)*(k2+.5)*n2)
+
+              
       result[k1,k2] = sub_result
     else:
       for n1 in range(N1):
         for n2 in range(N2):
+            
           sub_result += X[n1,n2] * cos((pi/N1)*(n1+.5)*k1) * \
               cos((pi/N2)*(n2+.5)*k2)
       result[k1,k2] = alpha(k1) * alpha(k2) * sub_result
