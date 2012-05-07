@@ -94,3 +94,24 @@ class JPEG(object):
         quant_val = int(round(dct_mat[row,col] / float(quant[row,col])))
         ret[row,col] = quant_val
     return ret
+
+  @staticmethod
+  def fs_dither(matrix):
+    for row in range(8):
+      for col in range(8):
+        old_pixel = matrix[row,col]
+        new_pixel = round(old_pixel)
+
+        matrix[row,col] = new_pixel
+        quant_error = old_pixel - new_pixel
+
+        if row > 0 and col < 7:
+          matrix[row-1][col+1] = matrix[row-1][col+1] + 3/16. * quant_error
+        if row < 7:
+          matrix[row+1,col] = matrix[row+1,col] + 7/16. * quant_error
+        if row < 7 and col < 7:
+          matrix[row+1][col+1] = matrix[row+1][col+1] + 1/16. * quant_error
+        if col < 7:
+          matrix[row][col+1] = matrix[row][col+1] + 5/16. * quant_error
+
+    return matrix
