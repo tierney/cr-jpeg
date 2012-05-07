@@ -8,11 +8,10 @@ from ColorSpace import ColorSpace
 class DCT(object):
   # Example use:
   #   from dct import DCT
-  #   dct = DCT('test.jpg',75)
+  #   dct = DCT('test.jpg')
   #   ret = dct.get_dcts()
-  def __init__(self, image_path, quality):
+  def __init__(self, image_path):
     self.image_path = image_path
-    self.quality = quality
 
   def _decompose(self):
     # Imperfectly grabs all of the 8x8 pixel blocks (will ignore edge blocks
