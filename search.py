@@ -1,6 +1,13 @@
 import numpy as np
 from jpegcodec import JPEG
 
+# some assumptions from looking at 
+# 8x8 DCT tables of natural images
+# - most coefficients are between -200 and 600
+# - any coefficients in the first row are always positive 
+LOWEST = -200
+HIGHEST = 200 
+
 class BitEncoder:
   def __init__(self, k, quant, bits_per_bin):
     self.k = k
@@ -23,18 +30,15 @@ class BitEncoder:
       # the 2D index into quantization and DCT matrices
       idx = np.unravel_index(flat_idx, self.quant.shape)
       quantization_level = self.quant[idx]
-      dct[idx] = n * quantization_level
+      v = n * quantization_level + (LOWEST if idx[0] > 0 else 0)
+      dct[idx] = v 
     return dct
 
 
 
-def search(accept, quality = 20):
+def search(quality = 20):
   """
   Inputs:
-    - accept : (bit string -> DCT Matrix) -> bool
-      Repeatedly test whether a given DCT encoder survives 
-      the conversions to/from RGB space.
-
     - quality_level : int (between 1 and 100)
   Returns:
     - an encoder from k-length bit strings to 
@@ -46,19 +50,10 @@ def search(accept, quality = 20):
   quant_shape = quant.shape
   sorted_indices = np.argsort(quant_values)
   bits_per_bin = np.zeros_like(quant_values, dtype='int')
-  k = 0
   for i,idx in enumerate(sorted_indices):
     q = quant_values[idx]
-    accepted = True
-    nbits = 0
-    while accepted:
-      bits_per_bin[idx] = nbits
-      encoder = BitEncoder(k+nbits, quant, bits_per_bin)
-      accepted = accept(encoder.encode)
-      # catch any runaway loops
-      nbits += 1
-      assert (nbits < 100)
-    # last iteration failed, so use one less bit in this bin
-    bits_per_bin[idx] = nbits - 1 
-    k += (nbits - 1)
+    nbits = HIGHEST / q     
+    bits_per_bin[idx] = nbits
+  total_nbits = np.sum(bits_per_bin) 
+  encoder = BitEncoder(total_nbits, quant, bits_per_bin)
   return encoder
