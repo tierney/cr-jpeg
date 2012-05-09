@@ -80,10 +80,14 @@ def main(argv):
 
   all_values = []
   all_values += parameterize(color['white'], color['black'], 9)
-  all_values += parameterize(color['yellow'], color['blue'], 5)
-  all_values += parameterize(color['red'], color['cyan'], 5)
-  all_values += parameterize(color['green'], color['purple'], 5)
+  all_values += parameterize(color['yellow'], color['blue'], 9)
+  # all_values += parameterize(color['red'], color['cyan'], 4)
+  # all_values += parameterize(color['green'], color['purple'], 4)
+  all_values = list(set(all_values))
   num_values = len(all_values)
+  import math
+  print 'Number of distinct values: %d (%.2f bits).' % \
+    (num_values, math.log(num_values, 2))
   from scipy.spatial.distance import pdist
   distances = pdist(all_values)
   count = 0
@@ -92,18 +96,19 @@ def main(argv):
     for j in range(i + 1, num_values):
       idx_val[count] = (i, j)
       count += 1
+
   for idx in idx_val:
     first, second = idx_val[idx]
     if distances[idx] < 28:
       print idx, all_values[first], all_values[second], distances[idx]
-  return
 
+  possible_values = all_values
   im = Image.new('YCbCr', (8, 8))
   pixels = im.load()
   for row in range(0, 8, 2):
     for col in range(0, 8, 2):
       val = tuple(map(int, random.choice(possible_values)))
-      print val
+      print 'Written:', val
       pixels[row, col] = val
       pixels[row + 1, col] = val
       pixels[row, col + 1] = val
@@ -111,10 +116,24 @@ def main(argv):
 
   im.save('test.jpg', quality=95)
 
-  parameterize(color['yellow'], color['blue'], 9)
-  parameterize(color['red'], color['cyan'], 9)
-  parameterize(color['green'], color['purple'], 9)
-
+  opened_im = Image.open('test.jpg')
+  pixels = opened_im.load()
+  for row in range(0, 8, 2):
+    for col in range(0, 8, 2):
+      vals = {}
+      for idx in range(3):
+        val = 0
+        val += pixels[row, col][idx]
+        val += pixels[row + 1, col][idx]
+        val += pixels[row, col + 1][idx]
+        val += pixels[row + 1, col + 1][idx]
+        val /= 4.0
+        vals[idx] = val
+      red = vals[0]
+      green = vals[1]
+      blue = vals[2]
+      ycc = ColorSpace.to_ycc(red, green, blue)
+      print '%6.2f %6.2f %6.2f' % ycc
 
   return
   #scatter3d_demo()
