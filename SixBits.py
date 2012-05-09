@@ -13,13 +13,14 @@ import sys
 
 def generate_ycc_from_rgb():
   cs = ColorSpace()
-  increment = 24
+  increment = 64
   with open('rgb_ycc.txt', 'w') as fh:
     for red in range(0, 256, increment):
       for green in range(0, 256, increment):
         for blue in range(0, 256, increment):
           lum, cb, cr = cs.to_ycc(red, green, blue)
-          fh.write('%d,%d,%d,%.2f,%.2f,%.2f\n' % (red, green, blue, lum, cb, cr))
+          fh.write('%d,%d,%d,%.2f,%.2f,%.2f\n' % \
+                   (red, green, blue, lum, cb, cr))
     fh.flush()
 
 
@@ -76,13 +77,21 @@ def main(argv):
            'red'    : (76, 85, 255),
            'cyan'   : (179, 171, 1),
            'green'  : (150, 44, 21),
-           'purple' : (105, 212, 235)}
+           'magenta' : (105, 212, 235)}
 
   all_values = []
-  all_values += parameterize(color['white'], color['black'], 9)
-  all_values += parameterize(color['yellow'], color['blue'], 9)
-  # all_values += parameterize(color['red'], color['cyan'], 4)
-  # all_values += parameterize(color['green'], color['purple'], 4)
+  num_discretizations = 4
+  all_values += parameterize(color['white'], color['black'], 8)
+  all_values += parameterize(color['blue'], color['cyan'], 8)
+  # all_values += parameterize(color['cyan'], color['green'], 4)
+  # all_values += parameterize(color['green'], color['yellow'], 4)
+  # all_values += parameterize(color['red'], color['yellow'], 4)
+  all_values += parameterize(color['red'], color['magenta'], 8)
+  # all_values += parameterize(color['blue'], color['magenta'], 4)
+
+  # all_values += parameterize(color['yellow'], color['blue'], num_discretizations)
+  # all_values += parameterize(color['red'], color['cyan'], num_discretizations)
+  # all_values += parameterize(color['green'], color['magenta'], num_discretizations)
   all_values = list(set(all_values))
   num_values = len(all_values)
   import math
@@ -105,16 +114,18 @@ def main(argv):
   possible_values = all_values
   im = Image.new('YCbCr', (8, 8))
   pixels = im.load()
+  original_vals = []
   for row in range(0, 8, 2):
     for col in range(0, 8, 2):
       val = tuple(map(int, random.choice(possible_values)))
+      original_vals.append(val)
       print 'Written:', val
       pixels[row, col] = val
       pixels[row + 1, col] = val
       pixels[row, col + 1] = val
       pixels[row + 1, col + 1] = val
-
-  im.save('test.jpg', quality=95)
+  original_vals.reverse()
+  im.save('test.jpg', quality=75)
 
   opened_im = Image.open('test.jpg')
   pixels = opened_im.load()
@@ -133,17 +144,25 @@ def main(argv):
       green = vals[1]
       blue = vals[2]
       ycc = ColorSpace.to_ycc(red, green, blue)
-      _min = 1000
-      _min_vect = ()
+
+      _second_best = _min = 1000
+      _second_best_vect = _min_vect = ()
       for vect in all_values:
-        dist = wminkowski(ycc, vect, 2, [2, 1, 1])
+        dist = wminkowski(ycc, vect, 2, [25, 1, 1])
+        _euclid = euclidean(ycc, vect)
+        # print dist, _euclid
         if dist < _min:
+
           _min = dist
           _min_vect = vect
-      print _min_vect,
+
+      _orig = list(original_vals.pop())
+      _extracted = map(int, _min_vect)
+      print _orig == _extracted, _orig, _extracted,
       print '%6.2f %6.2f %6.2f' % ycc
 
   return
+
   #scatter3d_demo()
   generate_ycc_from_rgb()
 
