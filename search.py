@@ -35,9 +35,12 @@ class BitEncoder:
 
 
 
-  def _gen_possible_values(self, quantization_level, n_values):
+  def _gen_possible_values(self, quantization_level, n_values, lowest = None):
     possible_values = []
-    lowest = int(self.lowest_dct_value / quantization_level) * quantization_level 
+    if lowest is None:
+        lowest = int(self.lowest_dct_value / quantization_level) * quantization_level 
+    else: 
+        lowest = int(lowest / quantization_level) * quantization_level
     return np.arange(n_values)*quantization_level + lowest
       
   def encode(self, bits):
@@ -53,53 +56,50 @@ class BitEncoder:
       b = self.bits_per_bin[flat_idx]
       # map from 1D index into bits_per_bin to 
       # the 2D index into quantization and DCT matrices
-      
-      quantization_level = self.ravel_quant[flat_idx]
-      
-      # these are integers so should get rounded by division
-      lowest = int(self.lowest_dct_value / quantization_level) * quantization_level 
-      
-      if flat_idx < 64 - self.n_control_coefs :
+      if b > 0:
+          quantization_level = self.ravel_quant[flat_idx]
+          
+          # these are integers so should get rounded by division
+          lowest = int(self.lowest_dct_value / quantization_level) * quantization_level 
+          
+          if flat_idx < 64 - self.n_control_coefs :
+            
+            substr = bits[curr_input_idx:curr_input_idx+b]
+            # convert the boolean substring to a single decimal number
+            positional_values = 2**np.arange(b)
+            if len(substr) < b:
+                z = np.zeros(b, dtype='bool')
+                z[:len(substr)] = substr
+                substr = z
+            n = np.dot(substr, positional_values)
+            
+            dct[flat_idx] = n * quantization_level + lowest
+            curr_input_idx += b 
+          else:
+            # we should be done with input now
+            assert curr_input_idx == len(bits)
+            
+            #n_values = self.num_values_per_bin[flat_idx]
+            possible_values = self._gen_possible_values(quantization_level, 20, -300)
+            # choose a value which makes the inverse as close to target clipping range as possible 
+            
+            best_clipping_score = np.inf
+            best_value = None
+            
+            for candidate in possible_values:
+              dct[flat_idx] = candidate
+              # perform inverse DCT
+              inverse = scipy.fftpack.dct(dct.reshape((8,8)), type=3, norm='ortho')
+              inverse = np.ravel(inverse)
+              too_low = inverse < -128
+              too_high = inverse > 127
+              
+              score = np.sum(-inverse[too_low] - 128) + np.sum(inverse[too_high] - 127)
+              if score < best_clipping_score:
+                 best_value = candidate
+                 best_clipping_score = score 
+            dct[flat_idx] = best_value 
         
-        substr = bits[curr_input_idx:curr_input_idx+b]
-        # convert the boolean substring to a single decimal number
-        positional_values = 2**np.arange(b)
-        n = np.dot(substr, positional_values)
-        
-        dct[flat_idx] = n * quantization_level + lowest
-        curr_input_idx += b 
-      else:
-        # we should be done with input now
-        assert curr_input_idx == len(bits)
-        
-        #n_values = self.num_values_per_bin[flat_idx]
-        possible_values = self._gen_possible_values(quantization_level, 10)
-        # choose a value which makes the inverse as close to target clipping range as possible 
-        
-        best_clipping_score = np.inf
-        best_value = None
-        
-        for candidate in possible_values:
-          dct[flat_idx] = candidate
-          # perform inverse DCT
-          inverse = scipy.fftpack.dct(dct.reshape((8,8)), type=3, norm='ortho')
-          inverse = np.ravel(inverse)
-          #print inverse 
-          too_low = inverse < -128
-          too_high = inverse > 127
-          #print inverse[too_low]
-          #print inverse[too_high]
-          score = np.sum(-inverse[too_low] - 128) + np.sum(inverse[too_high] - 127)
-          if score < best_clipping_score:
-             #print score, candidate
-             best_value = candidate
-             best_clipping_score = score 
-        dct[flat_idx] = best_value 
-        
-      
-      
-      
-
     square_dct = dct.reshape(self.quant.shape)
     
     return square_dct
@@ -113,16 +113,17 @@ class BitEncoder:
       
       quantization_level = self.ravel_quant[flat_idx]
       n_values = self.num_values_per_bin[flat_idx]
-      possible_values = self._gen_possible_values(quantization_level, n_values)
-      n = np.argmin(np.abs(possible_values - dct_val))
+      if n_values > 0:
+        possible_values = self._gen_possible_values(quantization_level, n_values)
+        n = np.argmin(np.abs(possible_values - dct_val))
+        b = self.bits_per_bin[flat_idx]
       
-      b = self.bits_per_bin[flat_idx]
-      
-      # encode binary form of n into output vector
-      for i in xrange(b):
-        bits[output_idx] = n % 2
-        output_idx += 1
-        n /= 2 
+        # encode binary form of n into output vector
+        for i in xrange(b):
+          if output_idx < self.n_bits:
+            bits[output_idx] = n % 2
+            output_idx += 1
+            n /= 2 
     return bits 
 
 import math 
@@ -143,11 +144,16 @@ def mk_encoder(quality = 25, n_control_bins = 10, lowest = -100, highest=60):
   quant_values = np.ravel(quant)
   quant_shape = quant.shape
   sorted_indices = np.argsort(quant_values)
-  value_range = highest - lowest 
+  
   bits_per_bin = np.zeros_like(quant_values, dtype='int')
   for i,idx in enumerate(sorted_indices):
+    
     q = float(quant_values[idx])
-    nbits = np.ceil(np.log2(value_range / q))
+    value_range = int(highest/q)*q - int(lowest/q)*q
+    if value_range > 0:
+      nbits = int(np.ceil(np.log2(float(value_range) / q)))
+    else:
+      nbits = 0
     bits_per_bin[idx] = int(nbits)
   total_nbits = np.sum(bits_per_bin[:-n_control_bins]) 
   encoder = BitEncoder(
@@ -188,18 +194,26 @@ def test_random_vectors(encoder, n_iters=1000, verbose=False):
       print "# failed: %d / %d" % (n_failed, n_iters)
     return n_failed, n_clipped_below, n_clipped_above
     
-def search(quality=(20,50), n_control_bins=(5,60), lowest=(-500,-50), highest=(20,300), n_tests = 20):
+def search(quality=(20,55), n_control_bins=(1,60), lowest=(-300,-40), highest=(19,300), n_tests = 30):
     best_nbits = 0
     best_encoder = None
     
-    for q in np.arange(quality[0], quality[1],5):
+    for q in np.arange(quality[0], quality[1],2)[::-1]:
         for cb in np.arange(n_control_bins[0], n_control_bins[1]):
-            for l in np.arange(lowest[0], lowest[1], 10):
-                for h in np.arange(highest[0], highest[1], 10):
+            for l in np.arange(lowest[0], lowest[1], 1)[::-1]:
+                last_failed = False 
+                for h in np.arange(highest[0], highest[1], 1):
                     en = mk_encoder(q, cb, l, h)
-                    n_failed, _, _ = test_random_vectors(en, 20)
-                    print (q,cb,l,h), " | failed = ", n_failed, "/", n_tests
-                    if n_failed == 0 and en.n_bits > best_nbits:
-                        best_nbits = en.n_bits
-                        best_encoder = en
+                    if en.n_bits > 0:
+                        n_failed, _, _ = test_random_vectors(en, n_tests)
+                        print "quality = %d, control bits = %d, low = %d, high = %d | failed = %d / %d" % (q,cb,l,h,n_failed, n_tests)
+                        if n_failed == 0:
+                            print "--> nbits = %d" % en.n_bits 
+                            last_failed = False
+                        else:
+                            if last_failed: break
+                            last_failed = True
+                        if n_failed == 0 and en.n_bits > best_nbits:
+                            best_nbits = en.n_bits
+                            best_encoder = en
     return best_encoder
