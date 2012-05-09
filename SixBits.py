@@ -88,7 +88,7 @@ def main(argv):
   import math
   print 'Number of distinct values: %d (%.2f bits).' % \
     (num_values, math.log(num_values, 2))
-  from scipy.spatial.distance import pdist
+  from scipy.spatial.distance import pdist, euclidean, wminkowski
   distances = pdist(all_values)
   count = 0
   idx_val = {}
@@ -133,6 +133,14 @@ def main(argv):
       green = vals[1]
       blue = vals[2]
       ycc = ColorSpace.to_ycc(red, green, blue)
+      _min = 1000
+      _min_vect = ()
+      for vect in all_values:
+        dist = wminkowski(ycc, vect, 2, [2, 1, 1])
+        if dist < _min:
+          _min = dist
+          _min_vect = vect
+      print _min_vect,
       print '%6.2f %6.2f %6.2f' % ycc
 
   return
