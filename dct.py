@@ -8,29 +8,14 @@ from ColorSpace import ColorSpace
 import numpy as np 
 from scipy.fftpack import dct 
 
-class DCT(object):
-  # Example use:
-  #   from dct import DCT
-  #   dct = DCT('test.jpg')
-  #   ret = dct.get_dcts()
-  def __init__(self, image_path):
-    self.image_path = image_path
-    self.rgb_image = None
-    self.rgb_array = None
-    self.ycc_array = None
-    self.ycc_sub_images = None
-
-  def _decompose_ycc(self, window_width = 8, window_height = 8):
-    # Imperfectly grabs all of the 8x8 pixel blocks (will ignore edge blocks
-    # that are smaller than 8x8).
-    
-    width, height,_ = self.ycc_array.shape
-
+# break a single channel image into windows, ignoring the edges
+def decompose_subimages(im, window_width = 8, window_height = 8 ):
+    width, height,_ = im.shape
     width_intevals = width / window_width # Leverage automatic floor-ing of divided ints.
     height_intervals = height / window_height
 
     sub_images = []
-    im = self.ycc_array
+
     for height_interval in range(width_intevals):
       height_start = height_interval * window_height
       height_end = height_start + window_height
@@ -41,7 +26,19 @@ class DCT(object):
         sub_images.append(sub_image)
     return sub_images
 
-  def get_dcts(self):
+
+class DCT(object):
+  # Example use:
+  #   from dct import DCT
+  #   dct = DCT('test.jpg')
+  #   ret = dct.get_dcts()
+  def __init__(self, image_path):
+    self.image_path = image_path
+    self.rgb_image = None
+    self.rgb_array = None
+    self.ycc_array = None
+    
+  def get_ycc_subimages(self):
     if self.rgb_image is None:
         self.rgb_image = Image.open(self.image_path)
         self.rgb_array = np.asarray(self.rgb_image)
@@ -57,24 +54,19 @@ class DCT(object):
         self.ycc_array[:,:,0] = lum
         self.ycc_array[:,:,1] = cb
         self.ycc_array[:,:,2] = cr
-        
-    if self.ycc_sub_images is None:
-        self.ycc_sub_images = self._decompose_ycc()
-
-    ret_dcts = []
-    for window in self.ycc_sub_images:
-      lum, _, _ = window[:, :, 0], window[:,:,1], window[:,:,2]
-         
-      # switched to scipy dct for performance 
-      lum_dct = dct(lum, type=2, norm='ortho' )
-      #lum_dct = two_dim_DCT(_lum_pixels)
-        
+    return decompose_subimages(self.ycc_array)
     
-      # TODO(tierney): Technically, need to subsample Cb and Cr before
-      # DCT. These Cb and Cr values should be treated as unrealistic until
-      # subsampling before the DCT step.
-      #cb_dct = two_dim_DCT(_cb_pixels)
-      #cr_dct = two_dim_DCT(_cr_pixels)
+  def get_luminance_subimages(self):
+      subimages = self.get_ycc_subimages()
+      return np.array([i[:,:,0] for i in subimages])
+      
+  def get_dcts(self):
+    ret_dcts = []
+    for lum in self.get_luminance_subimages():
+      # switched to scipy dct for performance 
+      # Remember: we're subtracting 128 before DCT
+      lum_dct = dct(lum - 128, type=2, norm='ortho' )
+      # TODO: don't ignore the Cb, Cr channels 
       ret_dcts.append(lum_dct)
     return numpy.array(ret_dcts)
 
