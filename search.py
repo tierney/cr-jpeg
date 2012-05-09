@@ -50,16 +50,17 @@ class BitEncoder:
             for candidate in possible_values:
               dct[flat_idx] = candidate
               # perform inverse DCT
-              inverse = scipy.fftpack.dct(dct.reshape((8,8)), type=3, norm='ortho')
-              inverse = np.ravel(inverse)
-              too_low = inverse < -128
-              too_high = inverse > 127
-              
-              score = np.sum(-inverse[too_low] - 128) + np.sum(inverse[too_high] - 127)
               if score < best_clipping_score:
                  best_value = candidate
                  best_clipping_score = score
   """
+  def _suboptimality(self, ravel_dct):
+    inverse = scipy.fftpack.dct(ravel_dct.reshape((8,8)), type=3, norm='ortho')
+    inverse = np.ravel(inverse)
+    too_low = inverse < -128
+    too_high = inverse > 127
+    return np.sum(-inverse[too_low] - 128) + np.sum(inverse[too_high] - 127)
+      
   def encode(self, bits):
     """
     map a k-length bit string to a DCT matrix
@@ -183,14 +184,17 @@ def test_random_vectors(encoder, n_iters=1000, verbose=False):
       print "# failed: %d / %d" % (n_failed, n_iters)
     return n_failed, n_clipped_below, n_clipped_above
     
-def search(quality=(20,55), lowest=(-300,-40), highest=(19,300), n_tests = 30):
+def search(quality=(50,55), lowest=(-300,-40), highest=(19,300), n_tests = 50):
     best_nbits = 0
     best_encoder = None
-    
+    best_quality = None
+    best_low = None
+    best_high = None
     for q in np.arange(quality[0], quality[1],2)[::-1]:
         for l in np.arange(lowest[0], lowest[1], 1)[::-1]:
             last_failed = False 
-            for h in np.arange(highest[0], highest[1], 1):
+            h = highest[0]
+            while h <= highest[1]:
                 en = mk_encoder(q, l, h)
                 if en.n_bits > 0:
                     n_failed, _, _ = test_random_vectors(en, n_tests)
@@ -199,9 +203,19 @@ def search(quality=(20,55), lowest=(-300,-40), highest=(19,300), n_tests = 30):
                         print "--> nbits = %d" % en.n_bits 
                         last_failed = False
                     else:
-                        if last_failed: break
+                        if last_failed: h += 100
                         last_failed = True
                     if n_failed == 0 and en.n_bits > best_nbits:
                         best_nbits = en.n_bits
                         best_encoder = en
+                        best_quality = q
+                        best_low = l
+                        best_high = h
+                    h += 1
+            print 
+            print
+            print "*** BEST SO FAR ***"
+            print "low: %d, high: %d, quality: %d" % (best_low, best_high, best_quality)
+            print "# bits: %d" % best_encoder.n_bits 
+            print
     return best_encoder
