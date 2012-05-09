@@ -5,7 +5,7 @@ from jpegcodec import JPEG
 # 8x8 DCT tables of natural images
 # - most coefficients are between -200 and 600
 # - any coefficients in the first row are always positive 
-
+import scipy.fftpack 
 class BitEncoder:
   def __init__(self, 
         n_bits, 
@@ -13,8 +13,7 @@ class BitEncoder:
         quant, 
         bits_per_bin, 
         lowest_dct_value, 
-        highest_dct_value, 
-        target_coef_sum):
+        highest_dct_value):
     """
       n_bits = how many bits of information can we encode in one 8x8 matrix? 
       n_control_ceofs = how many DCT coefs get used to push the sum of coefs toward -1000?
@@ -33,18 +32,13 @@ class BitEncoder:
     self.num_values_per_bin = 2 ** bits_per_bin
     self.lowest_dct_value = lowest_dct_value
     self.highest_dct_value = highest_dct_value
-    self.target_coef_sum = target_coef_sum
+
 
 
   def _gen_possible_values(self, quantization_level, n_values):
     possible_values = []
     lowest = int(self.lowest_dct_value / quantization_level) * quantization_level 
-    #highest = int(self.highest_dct_value / quantization_level) * quantization_level 
     return np.arange(n_values)*quantization_level + lowest
-    #while curr_value <= highest:
-    #  possible_values.append(curr_value)
-    #  curr_value += quantization_level
-    #return possible_values 
       
   def encode(self, bits):
     """
@@ -53,7 +47,7 @@ class BitEncoder:
     assert len(bits) == self.n_bits
     
     dct = np.zeros_like(self.ravel_quant)
-    running_sum = 0
+    
     curr_input_idx = 0
     for flat_idx in np.nonzero(self.bits_per_bin)[0]:
       b = self.bits_per_bin[flat_idx]
@@ -71,23 +65,43 @@ class BitEncoder:
         # convert the boolean substring to a single decimal number
         positional_values = 2**np.arange(b)
         n = np.dot(substr, positional_values)
-        v = n * quantization_level + lowest
+        
+        dct[flat_idx] = n * quantization_level + lowest
         curr_input_idx += b 
       else:
         # we should be done with input now
         assert curr_input_idx == len(bits)
-        # choose a value to make the sum of coefs closest to target sum 
-        n_values = self.num_values_per_bin[flat_idx]
-        possible_values = self._gen_possible_values(quantization_level, n_values)
-        possible_sums = running_sum + np.array(possible_values)
-        best_value_idx = np.argmin(np.abs(possible_sums - self.target_coef_sum))
-        v = possible_values[best_value_idx]
+        
+        #n_values = self.num_values_per_bin[flat_idx]
+        possible_values = self._gen_possible_values(quantization_level, 10)
+        # choose a value which makes the inverse as close to target clipping range as possible 
+        
+        best_clipping_score = np.inf
+        best_value = None
+        
+        for candidate in possible_values:
+          dct[flat_idx] = candidate
+          # perform inverse DCT
+          inverse = scipy.fftpack.dct(dct.reshape((8,8)), type=3, norm='ortho')
+          inverse = np.ravel(inverse)
+          #print inverse 
+          too_low = inverse < -128
+          too_high = inverse > 127
+          #print inverse[too_low]
+          #print inverse[too_high]
+          score = np.sum(-inverse[too_low] - 128) + np.sum(inverse[too_high] - 127)
+          if score < best_clipping_score:
+             #print score, candidate
+             best_value = candidate
+             best_clipping_score = score 
+        dct[flat_idx] = best_value 
+        
       
-      running_sum += v
-      dct[flat_idx] = v 
+      
+      
 
     square_dct = dct.reshape(self.quant.shape)
-
+    
     return square_dct
     
   def decode(self, dct):
@@ -116,7 +130,7 @@ import math
 
 # limits and target sum derived from empirical stats of some random
 # image of a kid on flickr
-def search(quality = 25, n_control_bins = 10, lowest = -200, highest=100, target_sum = -1000):
+def mk_encoder(quality = 25, n_control_bins = 10, lowest = -100, highest=60):
   """
   Inputs:
     - quality_level : int (between 1 and 100)
@@ -142,43 +156,50 @@ def search(quality = 25, n_control_bins = 10, lowest = -200, highest=100, target
     quant, 
     bits_per_bin,
     lowest,
-    highest, 
-    target_sum)
+    highest)
   return encoder
 
-import scipy.fftpack 
-def test_random_vectors(encoder, n_iters=1000):
+
+def test_random_vectors(encoder, n_iters=1000, verbose=False):
     n_failed = 0 
     n_clipped_below = 0
     n_clipped_above = 0
     for i in xrange(n_iters):
         vec = np.random.randn(encoder.n_bits) > 0
         dct = encoder.encode(vec)
-        inverse = scipy.fftpack.idct(dct, norm='ortho')
+        inverse = scipy.fftpack.dct(dct, type=3, norm='ortho').astype('int')
+
         
         # clip 
         clipped = inverse.copy()
-        bottom = inverse< -128
+        bottom = inverse < -128
         clipped[bottom] = -128 
         top = inverse > 127
         clipped[top] = 127 
         n_clipped_below += (0 if np.sum(bottom) == 0 else 1)
         n_clipped_above += (0 if np.sum(top) == 0 else 1)
-        dct2 = scipy.fftpack.dct(clipped, norm='ortho')
+        dct2 = scipy.fftpack.dct(clipped.astype('float'), type=2, norm='ortho')
         vec2 = encoder.decode(dct2)
         n_failed += (0 if np.all(vec == vec2) else 1)
-        #print "vec", vec
-        #print "dct", dct
-        #print "inverse", inverse
-        #print "clipped", clipped
-        #print "dct2", dct2
-        #print "vec2", vec2
-        #print "# wrong bits:", np.sum(vec != vec2)
-        #print 
-        #print 
-        if i % (n_iters / 10) == 0:
-            print "...%d of %d completed" % (i, n_iters)
-    print "# clipped below: %d / %d" % (n_clipped_below, n_iters)
-    print "# clipped above: %d / %d " % (n_clipped_above, n_iters)
-    print "# failed: %d / %d" % (n_failed, n_iters)
-
+      
+    if verbose:
+      print "# clipped below: %d / %d" % (n_clipped_below, n_iters)
+      print "# clipped above: %d / %d " % (n_clipped_above, n_iters)
+      print "# failed: %d / %d" % (n_failed, n_iters)
+    return n_failed, n_clipped_below, n_clipped_above
+    
+def search(quality=(20,50), n_control_bins=(5,60), lowest=(-500,-50), highest=(20,300), n_tests = 20):
+    best_nbits = 0
+    best_encoder = None
+    
+    for q in np.arange(quality[0], quality[1],5):
+        for cb in np.arange(n_control_bins[0], n_control_bins[1]):
+            for l in np.arange(lowest[0], lowest[1], 10):
+                for h in np.arange(highest[0], highest[1], 10):
+                    en = mk_encoder(q, cb, l, h)
+                    n_failed, _, _ = test_random_vectors(en, 20)
+                    print (q,cb,l,h), " | failed = ", n_failed, "/", n_tests
+                    if n_failed == 0 and en.n_bits > best_nbits:
+                        best_nbits = en.n_bits
+                        best_encoder = en
+    return best_encoder
