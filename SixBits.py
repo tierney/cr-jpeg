@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 
-import sys
-import argparse
-from PIL import Image
-import numpy
 from ColorSpace import ColorSpace
-import matplotlib.pyplot as plt
-import matplotlib
-import numpy as np
+from PIL import Image
 from mpl_toolkits.mplot3d import Axes3D
-
+import argparse
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy
+import numpy as np
+import random
+import sys
 
 def generate_ycc_from_rgb():
   cs = ColorSpace()
@@ -41,10 +41,26 @@ def parameterize(color_a, color_b, num_discretizations):
   cb = lambda(m) : a_cb + (b_cb - a_cb) * m
   cr = lambda(m) : a_cr + (b_cr - a_cr) * m
 
+  base = 1 / (2 * float(num_discretizations))
+  lum_cb_crs = []
   for i in range(num_discretizations):
-    frac = i * 1 / float(num_discretizations)
-    print '%6.2f %6.2f %6.2f' % (lum(frac), cb(frac), cr(frac))
+    frac = base + i * 1 / float(num_discretizations)
+    _lum_cb_cr = tuple(map(round, (lum(frac), cb(frac), cr(frac))))
+    lum_cb_crs.append(_lum_cb_cr)
+  return lum_cb_crs
 
+
+def random_22_block(possible_values):
+  matrix = numpy.zeros((8, 8, 3))
+  for i in range(0, 8, 2):
+    for j in range(0, 8, 2):
+      val = random.choice(possible_values)
+      print val
+      matrix[i, j] = val
+      matrix[i + 1, j] = val
+      matrix[i, j + 1] = val
+      matrix[i + 1, j + 1] = val
+  return matrix
 
 def main(argv):
   # Parse arguments.
@@ -53,19 +69,52 @@ def main(argv):
   args = parser.parse_args()
   _ = args
 
-  color = {'white': (255, 128, 128),
-           'black': (0, 128, 128),
-           'yellow': (226, 1, 149),
-           'blue': (29, 255, 107),
-           'red': (76, 85, 255),
-           'cyan': (179, 171, 1),
-           'green': (150, 44, 21),
-           'purple': (105, 212, 235)}
+  color = {'white'  : (255, 128, 128),
+           'black'  : (0, 128, 128),
+           'yellow' : (226, 1, 149),
+           'blue'   : (29, 255, 107),
+           'red'    : (76, 85, 255),
+           'cyan'   : (179, 171, 1),
+           'green'  : (150, 44, 21),
+           'purple' : (105, 212, 235)}
 
-  parameterize(color['white'], color['black'], 9)
+  all_values = []
+  all_values += parameterize(color['white'], color['black'], 9)
+  all_values += parameterize(color['yellow'], color['blue'], 5)
+  all_values += parameterize(color['red'], color['cyan'], 5)
+  all_values += parameterize(color['green'], color['purple'], 5)
+  num_values = len(all_values)
+  from scipy.spatial.distance import pdist
+  distances = pdist(all_values)
+  count = 0
+  idx_val = {}
+  for i in range(num_values):
+    for j in range(i + 1, num_values):
+      idx_val[count] = (i, j)
+      count += 1
+  for idx in idx_val:
+    first, second = idx_val[idx]
+    if distances[idx] < 28:
+      print idx, all_values[first], all_values[second], distances[idx]
+  return
+
+  im = Image.new('YCbCr', (8, 8))
+  pixels = im.load()
+  for row in range(0, 8, 2):
+    for col in range(0, 8, 2):
+      val = tuple(map(int, random.choice(possible_values)))
+      print val
+      pixels[row, col] = val
+      pixels[row + 1, col] = val
+      pixels[row, col + 1] = val
+      pixels[row + 1, col + 1] = val
+
+  im.save('test.jpg', quality=95)
+
   parameterize(color['yellow'], color['blue'], 9)
   parameterize(color['red'], color['cyan'], 9)
   parameterize(color['green'], color['purple'], 9)
+
 
   return
   #scatter3d_demo()
