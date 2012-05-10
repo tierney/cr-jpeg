@@ -13,7 +13,7 @@ import sys
 
 def generate_ycc_from_rgb():
   cs = ColorSpace()
-  increment = 32
+  increment = 42
   with open('rgb_ycc.txt', 'w') as fh:
     for red in range(0, 256, increment):
       for green in range(0, 256, increment):
@@ -32,23 +32,6 @@ def hex_to_rgb(value):
 
 def rgb_to_hex(rgb):
   return '#%02x%02x%02x' % rgb
-
-
-def parameterize(color_a, color_b, num_discretizations):
-  a_y, a_cb, a_cr = color_a
-  b_y, b_cb, b_cr = color_b
-
-  lum = lambda(m) : a_y + (b_y - a_y) * m
-  cb = lambda(m) : a_cb + (b_cb - a_cb) * m
-  cr = lambda(m) : a_cr + (b_cr - a_cr) * m
-
-  base = 1 / (2 * float(num_discretizations))
-  lum_cb_crs = []
-  for i in range(num_discretizations):
-    frac = base + i * 1 / float(num_discretizations)
-    _lum_cb_cr = tuple(map(round, (lum(frac), cb(frac), cr(frac))))
-    lum_cb_crs.append(_lum_cb_cr)
-  return lum_cb_crs
 
 
 def random_22_block(possible_values):
@@ -97,9 +80,28 @@ def visualize_ycc():
   array = numpy.zeros((8, 8, 3))
 
 
+def parameterize(color_a, color_b, num_discretizations):
+  a_y, a_cb, a_cr = color_a
+  b_y, b_cb, b_cr = color_b
+
+  lum = lambda(m) : a_y + (b_y - a_y) * m
+  cb = lambda(m) : a_cb + (b_cb - a_cb) * m
+  cr = lambda(m) : a_cr + (b_cr - a_cr) * m
+
+  base = 1 / (2 * float(num_discretizations))
+  lum_cb_crs = []
+  print 'Parameterization'
+  for i in range(num_discretizations):
+    frac = base + i * 1 / float(num_discretizations)
+    _lum_cb_cr = tuple(map(round, (lum(frac), cb(frac), cr(frac))))
+    print ' ', _lum_cb_cr
+    lum_cb_crs.append(_lum_cb_cr)
+  return lum_cb_crs
+
+
 def main(argv):
-  # visualize_ycc()
-  # return
+  visualize_ycc()
+  return
 
   # Parse arguments.
   parser = argparse.ArgumentParser(
@@ -107,6 +109,7 @@ def main(argv):
   args = parser.parse_args()
   _ = args
 
+  # Colors in this dictionary are describe in YCbCr space.
   color = {'white'  : (255, 128, 128),
            'black'  : (0, 128, 128),
            'yellow' : (226, 1, 149),
@@ -123,12 +126,15 @@ def main(argv):
 
   all_values += parameterize(color['white'], color['black'], num_discretizations)
 
+  all_values += [(128, 128, 218), (128, 128, 37)]
+  all_values += [(128, 199, 128), (128, 56, 128)]
+
   # for _c in color:
   #   all_values.append(color[_c])
-  all_values += [color['green']]
+  # all_values += [color['green']]
   # all_values += [color['yellow']]
-  all_values += [color['cyan']]
-  all_values += [color['magenta']]
+  # all_values += [color['cyan']]
+  # all_values += [color['magenta']]
 
   # all_values += parameterize(color['blue'], color['red'], num_discretizations)
   # all_values += parameterize(color['yellow'], color['black'], num_discretizations)
@@ -145,7 +151,12 @@ def main(argv):
   # all_values += parameterize(color['green'], color['magenta'], num_discretizations)
 
   all_values = list(set(all_values))
-  print sorted(all_values)
+
+  all_values.remove((128, 128, 128)) # Remove most ambiguious chunks.
+
+  print 'Values'
+  for _val in sorted(all_values):
+    print ' ', _val
   num_values = len(all_values)
   import math
   print 'Number of distinct values: %d (%.2f bits).' % \
@@ -211,9 +222,14 @@ def main(argv):
       _extracted = map(int, _min_vect)
 
       if _orig != _extracted:
+        _mismatch_print = 'Mismatch:\n'
+        _mismatch_print += '  original : %3d %3d %3d\n' % tuple(_orig)
+        _mismatch_print += '  closest  : %3d %3d %3d\n' % tuple(_extracted)
+        _mismatch_print += '  extracted: %3d %3d %3d\n' % tuple(map(int, map(round, ycc)))
+
         _to_print = tuple(_orig + _extracted + list(map(int, map(round, ycc))))
-        print _to_print
-        with open('wrong_match.txt','a') as fh:
+        print _mismatch_print
+        with open('wrong_match.txt', 'a') as fh:
           fh.write('%d,%d,%d,%d,%d,%d,%d,%d,%d\n' % \
                      _to_print)
 
