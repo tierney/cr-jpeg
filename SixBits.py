@@ -13,7 +13,7 @@ import sys
 
 def generate_ycc_from_rgb():
   cs = ColorSpace()
-  increment = 64
+  increment = 32
   with open('rgb_ycc.txt', 'w') as fh:
     for red in range(0, 256, increment):
       for green in range(0, 256, increment):
@@ -63,7 +63,44 @@ def random_22_block(possible_values):
       matrix[i + 1, j + 1] = val
   return matrix
 
+
+def visualize_ycc():
+  generate_ycc_from_rgb()
+
+  fig = plt.figure()
+  ax = fig.add_subplot(111, projection='3d')
+  with open('rgb_ycc.txt') as fh:
+    count = 0
+    while True:
+      line = fh.readline()
+      count += 1
+      if not line:
+        break
+      if count % 1000 == 0:
+        print count
+
+      red, green, blue, lum, cb, cr = line.split(',')
+      [lum, cb, cr] = map(float, [lum, cb, cr])
+      color = rgb_to_hex(tuple(map(int, (red, green, blue))))
+      mapped = [[x] for x in [lum, cb, cr]]
+      lum, cb, cr = map(numpy.array, mapped)
+      ax.scatter(cb, cr, lum, c=color, s=40)
+
+  ax.set_xlabel('Chroma Blue')
+  ax.set_ylabel('Chroma Red')
+  ax.set_zlabel('Luminance')
+
+  plt.show()
+  im = Image.new('RGB', (8, 8))
+  pixels = im.load()
+
+  array = numpy.zeros((8, 8, 3))
+
+
 def main(argv):
+  # visualize_ycc()
+  # return
+
   # Parse arguments.
   parser = argparse.ArgumentParser(
     prog='SixBits', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -80,24 +117,40 @@ def main(argv):
            'magenta' : (105, 212, 235)}
 
   all_values = []
-  num_discretizations = 4
-  all_values += parameterize(color['white'], color['black'], 8)
-  all_values += parameterize(color['blue'], color['cyan'], 8)
+
+  num_discretizations = 9
+  side_discrets = 4
+
+  all_values += parameterize(color['white'], color['black'], num_discretizations)
+
+  # for _c in color:
+  #   all_values.append(color[_c])
+  all_values += [color['green']]
+  # all_values += [color['yellow']]
+  all_values += [color['cyan']]
+  all_values += [color['magenta']]
+
+  # all_values += parameterize(color['blue'], color['red'], num_discretizations)
+  # all_values += parameterize(color['yellow'], color['black'], num_discretizations)
+  # all_values += parameterize(color['blue'], color['cyan'], side_discrets)
   # all_values += parameterize(color['cyan'], color['green'], 4)
   # all_values += parameterize(color['green'], color['yellow'], 4)
-  # all_values += parameterize(color['red'], color['yellow'], 4)
-  all_values += parameterize(color['red'], color['magenta'], 8)
+  # all_values += parameterize(color['red'], color['yellow'], side_discrets)
+  # all_values += parameterize(color['red'], color['magenta'], 8)
   # all_values += parameterize(color['blue'], color['magenta'], 4)
 
-  # all_values += parameterize(color['yellow'], color['blue'], num_discretizations)
-  # all_values += parameterize(color['red'], color['cyan'], num_discretizations)
+  # all_values += parameterize(color['yellow'], color['blue'], 4)
+  # all_values += parameterize(color['cyan'], color['magenta'], 4)
+  # all_values += parameterize(color['red'], color['cyan'], 4)
   # all_values += parameterize(color['green'], color['magenta'], num_discretizations)
+
   all_values = list(set(all_values))
+  print sorted(all_values)
   num_values = len(all_values)
   import math
   print 'Number of distinct values: %d (%.2f bits).' % \
     (num_values, math.log(num_values, 2))
-  from scipy.spatial.distance import pdist, euclidean, wminkowski
+  from scipy.spatial.distance import pdist, euclidean, wminkowski, cosine
   distances = pdist(all_values)
   count = 0
   idx_val = {}
@@ -148,51 +201,22 @@ def main(argv):
       _second_best = _min = 1000
       _second_best_vect = _min_vect = ()
       for vect in all_values:
-        dist = wminkowski(ycc, vect, 2, [25, 1, 1])
+        dist = wminkowski(ycc, vect, 2, [30, 1, 1])
         _euclid = euclidean(ycc, vect)
         # print dist, _euclid
         if dist < _min:
-
           _min = dist
           _min_vect = vect
-
       _orig = list(original_vals.pop())
       _extracted = map(int, _min_vect)
-      print _orig == _extracted, _orig, _extracted,
-      print '%6.2f %6.2f %6.2f' % ycc
 
-  return
+      if _orig != _extracted:
+        _to_print = tuple(_orig + _extracted + list(map(int, map(round, ycc))))
+        print _to_print
+        with open('wrong_match.txt','a') as fh:
+          fh.write('%d,%d,%d,%d,%d,%d,%d,%d,%d\n' % \
+                     _to_print)
 
-  #scatter3d_demo()
-  generate_ycc_from_rgb()
-
-  fig = plt.figure()
-  ax = fig.add_subplot(111, projection='3d')
-  with open('rgb_ycc.txt') as fh:
-    count = 0
-    while True:
-      line = fh.readline()
-      count += 1
-      if not line:
-        break
-      if count % 1000 == 0:
-        print count
-      red, green, blue, lum, cb, cr = line.split(',')
-      [lum, cb, cr] = map(float, [lum, cb, cr])
-      color = rgb_to_hex(tuple(map(int, (red, green, blue))))
-      mapped = [[x] for x in [lum, cb, cr]]
-      lum, cb, cr = map(numpy.array, mapped)
-      ax.scatter(cb, cr, lum, c=color)
-
-  ax.set_xlabel('Chroma Blue')
-  ax.set_ylabel('Chroma Red')
-  ax.set_zlabel('Luminance')
-
-  plt.show()
-  im = Image.new('RGB', (8, 8))
-  pixels = im.load()
-
-  array = numpy.zeros((8, 8, 3))
 
 
 if __name__ == '__main__':
