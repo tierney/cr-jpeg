@@ -54,7 +54,7 @@ def _numpy_enumerate():
     #   print valid_limits[value],
 
 
-def parameterize(color_a, color_b, num_discretizations):
+def parameterize(color_a, color_b, num_discretizations, base=None):
   a_y, a_cb, a_cr = color_a
   b_y, b_cb, b_cr = color_b
 
@@ -62,7 +62,8 @@ def parameterize(color_a, color_b, num_discretizations):
   cb = lambda(m) : a_cb + (b_cb - a_cb) * m
   cr = lambda(m) : a_cr + (b_cr - a_cr) * m
 
-  base = 1 / (2 * float(num_discretizations))
+  if not base:
+    base = 1 / (2 * float(num_discretizations))
   lum_cb_crs = []
   # print 'Parameterization'
   for i in range(num_discretizations):
@@ -131,12 +132,10 @@ def get_discrete_values():
   edge_val_at_lum = {}
 
   valid_coords_for_discretization = []
-  for _ycc in parameterize(colors['black'], colors['white'], 36):
+
+  for _ycc in parameterize((77, 128, 128), (155, 128, 128), 5, 0):
     lum, _, _ = map(int, map(round, _ycc))
     print lum
-
-    if lum < 75 or lum > 150:
-      continue
 
     admitted_edges = []
     for edge in edges:
@@ -151,7 +150,7 @@ def get_discrete_values():
       if lum >= min_lum and lum <= max_lum:
         admitted_edges.append(edge)
 
-    print admitted_edges
+    # print admitted_edges
     for _edge in admitted_edges:
       c0, c1 = _edge
       _cb, _cr = chrominance_at_luminance(colors[c0], colors[c1], lum)
@@ -161,13 +160,12 @@ def get_discrete_values():
 
     for point in points:
       point = map(int, map(round, point))
-      print point, valid_rgb(point)
+      # print point, valid_rgb(point)
       if valid_rgb(point):
         valid_coords_for_discretization.append(tuple(point))
 
   edge_vals = set(sorted(valid_coords_for_discretization))
   return list(edge_vals)
-
 
   # pd = pdist(points)
   # pdsf = squareform(pd)

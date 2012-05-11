@@ -127,6 +127,17 @@ def main(argv):
   all_values = YccLevels.get_discrete_values()
 
   all_values = list(set(all_values))
+  to_remove = [
+    (100,  72,  57),
+    (132,  54, 215),
+    (147,  45, 205),
+    (100, 215,  57),
+    ( 85, 224,  67),
+    (132, 197, 216),
+    (147, 188, 205)
+    ]
+  for _ in to_remove:
+    all_values.remove(_)
 
   # all_values.remove((128, 128, 128)) # Remove most ambiguious chunks.
 
@@ -165,6 +176,7 @@ def main(argv):
       pixels[row, col + 1] = val
       pixels[row + 1, col + 1] = val
   original_vals.reverse()
+
   im.save('test.jpg', quality=75)
 
   opened_im = Image.open('test.jpg')
@@ -183,32 +195,29 @@ def main(argv):
       red = vals[0]
       green = vals[1]
       blue = vals[2]
-      ycc = ColorSpace.to_ycc(red, green, blue)
+      extracted = ColorSpace.to_ycc(red, green, blue)
 
-      _second_best = _min = 1000
-      _second_best_vect = _min_vect = ()
+      _best_val = 1000
+      _best_match = ()
+      # print all_values
+
       for vect in all_values:
-        dist = wminkowski(ycc, vect, 2, [30, 1, 1])
-        _euclid = euclidean(ycc, vect)
-        # print dist, _euclid
-        if dist < _min:
-          _min = dist
-          _min_vect = vect
+        dist = wminkowski(extracted, vect, 2, [20, 1, 1])
+        if dist < _best_val:
+          _best_val = dist
+          _best_match = vect
+
       _orig = list(original_vals.pop())
-      _extracted = map(int, _min_vect)
+      _best_match = map(int, _best_match) # map(int, _min_vect)
 
-      if _orig != _extracted:
+      if _orig != _best_match:
         _mismatch_print = 'Mismatch:\n'
-        _mismatch_print += '  original : %3d %3d %3d\n' % tuple(_orig)
-        _mismatch_print += '  closest  : %3d %3d %3d\n' % tuple(_extracted)
-        _mismatch_print += '  extracted: %3d %3d %3d\n' % tuple(map(int, map(round, ycc)))
+        _mismatch_print += '  original = (%3d, %3d, %3d)\n' % tuple(_orig)
+        _mismatch_print += '  closest = (%3d, %3d, %3d)\n' % tuple(_best_match)
+        _mismatch_print += '  extracted = (%3d, %3d, %3d)\n' % tuple(map(int, map(round, extracted)))
 
-        _to_print = tuple(_orig + _extracted + list(map(int, map(round, ycc))))
         print _mismatch_print
-        with open('wrong_match.txt', 'a') as fh:
-          fh.write('%d,%d,%d,%d,%d,%d,%d,%d,%d\n' % \
-                     _to_print)
-
+        print >>sys.stderr, _mismatch_print
 
 
 if __name__ == '__main__':
