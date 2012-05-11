@@ -100,8 +100,8 @@ def parameterize(color_a, color_b, num_discretizations):
 
 
 def main(argv):
-  visualize_ycc()
-  return
+  # visualize_ycc()
+  # return
 
   # Parse arguments.
   parser = argparse.ArgumentParser(
@@ -123,40 +123,16 @@ def main(argv):
 
   num_discretizations = 9
   side_discrets = 4
-
-  all_values += parameterize(color['white'], color['black'], num_discretizations)
-
-  all_values += [(128, 128, 218), (128, 128, 37)]
-  all_values += [(128, 199, 128), (128, 56, 128)]
-
-  # for _c in color:
-  #   all_values.append(color[_c])
-  # all_values += [color['green']]
-  # all_values += [color['yellow']]
-  # all_values += [color['cyan']]
-  # all_values += [color['magenta']]
-
-  # all_values += parameterize(color['blue'], color['red'], num_discretizations)
-  # all_values += parameterize(color['yellow'], color['black'], num_discretizations)
-  # all_values += parameterize(color['blue'], color['cyan'], side_discrets)
-  # all_values += parameterize(color['cyan'], color['green'], 4)
-  # all_values += parameterize(color['green'], color['yellow'], 4)
-  # all_values += parameterize(color['red'], color['yellow'], side_discrets)
-  # all_values += parameterize(color['red'], color['magenta'], 8)
-  # all_values += parameterize(color['blue'], color['magenta'], 4)
-
-  # all_values += parameterize(color['yellow'], color['blue'], 4)
-  # all_values += parameterize(color['cyan'], color['magenta'], 4)
-  # all_values += parameterize(color['red'], color['cyan'], 4)
-  # all_values += parameterize(color['green'], color['magenta'], num_discretizations)
+  import YccLevels
+  all_values = YccLevels.get_discrete_values()
 
   all_values = list(set(all_values))
 
-  all_values.remove((128, 128, 128)) # Remove most ambiguious chunks.
+  # all_values.remove((128, 128, 128)) # Remove most ambiguious chunks.
 
-  print 'Values'
-  for _val in sorted(all_values):
-    print ' ', _val
+  # print 'Values'
+  # for _val in sorted(all_values):
+  #   print ' ', _val
   num_values = len(all_values)
   import math
   print 'Number of distinct values: %d (%.2f bits).' % \
@@ -170,10 +146,10 @@ def main(argv):
       idx_val[count] = (i, j)
       count += 1
 
-  for idx in idx_val:
-    first, second = idx_val[idx]
-    if distances[idx] < 28:
-      print idx, all_values[first], all_values[second], distances[idx]
+  # for idx in idx_val:
+  #   first, second = idx_val[idx]
+  #   if distances[idx] < 28:
+  #     print idx, all_values[first], all_values[second], distances[idx]
 
   possible_values = all_values
   im = Image.new('YCbCr', (8, 8))
