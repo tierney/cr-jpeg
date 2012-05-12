@@ -209,6 +209,10 @@ def get_discrete_values():
         print '  s',small
 
       if i > 0:
+        if x not in small and y not in small:
+          # TODO (tierney): Should try to remove one node from every added pair.
+          small += [x,y]
+          continue
         if x in small:
           removed.append(x)
         if y in small:
