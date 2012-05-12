@@ -4,6 +4,8 @@ import sys
 from scipy.spatial.distance import pdist, euclidean, wminkowski, cosine, squareform
 import numpy
 from ColorSpace import ColorSpace
+import logging
+
 
 cs = ColorSpace()
 to_ycc = cs.to_ycc
@@ -84,25 +86,33 @@ def chrominance_at_luminance(ycc_0, ycc_1, lum):
   return cb, cr
 
 
-def dumb_factor(n, goal):
+def dumb_factor(goal, n):
   # Assumes factors are not equal to each other and bounded above by
   # upper_bound.
   import scipy
 
   comb0 = scipy.comb(n, 2)
-  ret_i, ret_j = 0, 0
-  for i in range(n+1):
+  for i in range(0, n):
     comb1 = scipy.comb(n-i, 2)
-    for j in range(i+1, n+1):
+    for j in range(i+1, n):
       if goal == round(comb0 - comb1 + (j - i - 1)):
-        ret_i = i
-        ret_j = j
-        break
-  return ret_i, ret_j
+        return i, j
+
+
+def find_ij_given_index_n(index, n):
+  for i in range(n):
+    for j in range(i+1, n):
+      if index == round(-0.5 * i**2 + i*n - 0.5*i + j - 1):
+        return i, j
 
 
 def main(argv):
-  pass
+  logging.basicConfig(level=logging.INFO,
+                      stream=sys.stdout,
+                      format = '%(asctime)-15s %(levelname)8s %(module)20s '\
+                        '%(lineno)4d %(message)s')
+  get_discrete_values()
+
 
 def get_discrete_values():
   # Colors in this dictionary are describe in YCbCr space.
@@ -133,10 +143,18 @@ def get_discrete_values():
 
   valid_coords_for_discretization = []
 
-  for _ycc in parameterize((0, 128, 128), (255, 128, 128), 9, 0):
+  lum_slice_levels = []
+  for _ycc in parameterize((0, 128, 128), (255, 128, 128), 8, 0):
     lum, _, _ = map(int, map(round, _ycc))
+    lum_slice_levels.append(lum)
 
+  # lum_slice_levels += [0, 255]
+  print lum_slice_levels
+
+  accum_points = []
+  for lum in lum_slice_levels:
     admitted_edges = []
+    edge_val_at_lum = {}
     for edge in edges:
       c0, c1 = edge
 
@@ -149,24 +167,69 @@ def get_discrete_values():
       if lum >= min_lum and lum <= max_lum:
         admitted_edges.append(edge)
 
-    print lum, admitted_edges
-    return
-
+    logging.info('Lum: %d. Admitted Edges: %s.' % (lum, str(admitted_edges)))
     for _edge in admitted_edges:
       c0, c1 = _edge
       _cb, _cr = chrominance_at_luminance(colors[c0], colors[c1], lum)
       edge_val_at_lum[_edge] = (lum, _cb, _cr)
 
+    for relevant_edge in edge_val_at_lum:
+      logging.info(' '.join(map(str, [relevant_edge,
+                                      edge_val_at_lum[relevant_edge]])))
+
     points = edge_val_at_lum.values()
+    set_of_points = list(set(points))
 
-    for point in points:
-      point = map(int, map(round, point))
-      # print point, valid_rgb(point)
-      if valid_rgb(point):
-        valid_coords_for_discretization.append(tuple(point))
+    print 'Points:', set_of_points
+    pdists = pdist(set_of_points)
 
-  edge_vals = set(sorted(valid_coords_for_discretization))
-  return list(edge_vals)
+    print sorted(pdists)
+    small = []
+    removed = []
+
+    potential_removes = set()
+    for i, pd in enumerate(sorted(pdists)):
+      if pd > 100:
+        break
+      indices = numpy.where(pdists == pd)[0]
+      index = indices[0]
+      x, y = dumb_factor(index, len(set_of_points))
+      potential_removes.add(x)
+      potential_removes.add(y)
+    print 'Potential removes', potential_removes
+
+    for i, pd in enumerate(sorted(pdists)):
+      indices = numpy.where(pdists == pd)[0]
+      index = indices[0]
+      x, y = dumb_factor(index, len(set_of_points))
+      print ' -', pd, index, x, y, set_of_points[x], set_of_points[y]
+
+      if i == 0:
+        small += [x, y]
+        print '  s',small
+
+      if i > 0:
+        if x in small:
+          removed.append(x)
+        if y in small:
+          removed.append(y)
+        if [] != removed:
+          break
+
+    print 'Removed', removed
+    for _r in removed:
+      set_of_points.remove(set_of_points[_r])
+    print 'Set of points:', set_of_points
+    accum_points += set_of_points
+
+    # for point in points:
+    #   point = map(int, map(round, point))
+    #   # print point, valid_rgb(point)
+    #   if valid_rgb(point):
+    #     valid_coords_for_discretization.append(tuple(point))
+
+  print 'POINTS', len(accum_points)
+  return accum_points
 
   # pd = pdist(points)
   # pdsf = squareform(pd)

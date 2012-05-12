@@ -13,7 +13,7 @@ import sys
 
 def generate_ycc_from_rgb():
   cs = ColorSpace()
-  increment = 42
+  increment = 24
   with open('rgb_ycc.txt', 'w') as fh:
     for red in range(0, 256, increment):
       for green in range(0, 256, increment):
@@ -80,7 +80,7 @@ def visualize_ycc():
   array = numpy.zeros((8, 8, 3))
 
 
-def parameterize(color_a, color_b, num_discretizations):
+def parameterize(color_a, color_b, num_discretizations, base=None):
   a_y, a_cb, a_cr = color_a
   b_y, b_cb, b_cr = color_b
 
@@ -88,7 +88,9 @@ def parameterize(color_a, color_b, num_discretizations):
   cb = lambda(m) : a_cb + (b_cb - a_cb) * m
   cr = lambda(m) : a_cr + (b_cr - a_cr) * m
 
-  base = 1 / (2 * float(num_discretizations))
+  if not base:
+    base = 1 / (2 * float(num_discretizations))
+
   lum_cb_crs = []
   print 'Parameterization'
   for i in range(num_discretizations):
@@ -123,27 +125,28 @@ def main(argv):
 
   num_discretizations = 9
   side_discrets = 4
+
   import YccLevels
   all_values = YccLevels.get_discrete_values()
-
   all_values = list(set(all_values))
-  to_remove = [
-    (100,  72,  57),
-    (132,  54, 215),
-    (147,  45, 205),
-    (100, 215,  57),
-    ( 85, 224,  67),
-    (132, 197, 216),
-    (147, 188, 205)
-    ]
-  for _ in to_remove:
-    all_values.remove(_)
+  # to_remove = [
+  #   (100,  72,  57),
+  #   (132,  54, 215),
+  #   (147,  45, 205),
+  #   (100, 215,  57),
+  #   ( 85, 224,  67),
+  #   (132, 197, 216),
+  #   (147, 188, 205)
+  #   ]
+  # for _ in to_remove:
+  #   all_values.remove(_)
 
   # all_values.remove((128, 128, 128)) # Remove most ambiguious chunks.
 
-  # print 'Values'
-  # for _val in sorted(all_values):
-  #   print ' ', _val
+  print 'Values'
+  for _val in sorted(all_values):
+    print ' ', _val
+
   num_values = len(all_values)
   import math
   print 'Number of distinct values: %d (%.2f bits).' % \
