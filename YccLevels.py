@@ -5,7 +5,10 @@ from scipy.spatial.distance import pdist, euclidean, wminkowski, cosine, squaref
 import numpy
 from ColorSpace import ColorSpace
 import logging
-
+try:
+  from scipy import comb
+except:
+  from scipy.misc import comb
 
 cs = ColorSpace()
 to_ycc = cs.to_ycc
@@ -56,7 +59,7 @@ def _numpy_enumerate():
     #   print valid_limits[value],
 
 
-def parameterize(color_a, color_b, num_discretizations, base=-1):
+def parameterize(color_a, color_b, num_discretizations, base= -1):
   a_y, a_cb, a_cr = color_a
   b_y, b_cb, b_cr = color_b
 
@@ -80,36 +83,41 @@ def chrominance_at_luminance(ycc_0, ycc_1, lum):
   y0, cb0, cr0 = ycc_0
   y1, cb1, cr1 = ycc_1
 
-  cb = cb0 + (cb1 - cb0) * ( (lum - y0) / float(y1 - y0))
-  cr = cr0 + (cr1 - cr0) * ( (lum - y0) / float(y1 - y0))
+  cb = cb0 + (cb1 - cb0) * ((lum - y0) / float(y1 - y0))
+  cr = cr0 + (cr1 - cr0) * ((lum - y0) / float(y1 - y0))
 
   return cb, cr
+
+def round_ycc(ycc):
+  _ycc = map(int, map(round, ycc))
+  rgb = to_rgb(_ycc)
+  if valid_rgb(rgb):
+    return _ycc
 
 
 def dumb_factor(goal, n):
   # Assumes factors are not equal to each other and bounded above by
   # upper_bound.
-  import scipy
 
-  comb0 = scipy.comb(n, 2)
+  comb0 = comb(n, 2)
   for i in range(0, n):
-    comb1 = scipy.comb(n-i, 2)
-    for j in range(i+1, n):
+    comb1 = comb(n - i, 2)
+    for j in range(i + 1, n):
       if goal == round(comb0 - comb1 + (j - i - 1)):
         return i, j
 
 
 def find_ij_given_index_n(index, n):
   for i in range(n):
-    for j in range(i+1, n):
-      if index == round(-0.5 * i**2 + i*n - 0.5*i + j - 1):
+    for j in range(i + 1, n):
+      if index == round(-0.5 * i ** 2 + i * n - 0.5 * i + j - 1):
         return i, j
 
 
 def main(argv):
   logging.basicConfig(level=logging.INFO,
                       stream=sys.stdout,
-                      format = '%(asctime)-15s %(levelname)8s %(module)20s '\
+                      format='%(asctime)-15s %(levelname)8s %(module)20s '\
                         '%(lineno)4d %(message)s')
   get_discrete_values()
 
@@ -144,7 +152,7 @@ def get_discrete_values():
   valid_coords_for_discretization = []
 
   lum_slice_levels = []
-  for _ycc in parameterize((0, 128, 128), (255, 128, 128), 8, 0):
+  for _ycc in parameterize((0, 128, 128), (255, 128, 128), 8):
     lum, _, _ = map(int, map(round, _ycc))
     lum_slice_levels.append(lum)
 
@@ -184,20 +192,22 @@ def get_discrete_values():
     pdists = pdist(set_of_points)
 
     print sorted(pdists)
-    small = []
-    removed = []
-
-    potential_removes = set()
+    dubious_pairs = set()
+    MIN_REQUIRED_DISTANCE = 100
     for i, pd in enumerate(sorted(pdists)):
-      if pd > 100:
+      if pd > MIN_REQUIRED_DISTANCE:
         break
+
+      # Found a short distance.
       indices = numpy.where(pdists == pd)[0]
       index = indices[0]
       x, y = dumb_factor(index, len(set_of_points))
-      potential_removes.add(x)
-      potential_removes.add(y)
-    print 'Potential removes', potential_removes
+      dubious_pairs.add((x,y))
 
+    print 'Potential removes', dubious_pairs, len(dubious_pairs)
+
+    small = []
+    removed = []
     for i, pd in enumerate(sorted(pdists)):
       indices = numpy.where(pdists == pd)[0]
       index = indices[0]
@@ -206,21 +216,24 @@ def get_discrete_values():
 
       if i == 0:
         small += [x, y]
-        print '  s',small
+        print '  s', small
 
       if i > 0:
         if x not in small and y not in small:
           # TODO (tierney): Should try to remove one node from every added pair.
-          small += [x,y]
+          small += [x, y]
           continue
         if x in small:
           removed.append(x)
         if y in small:
           removed.append(y)
         if [] != removed:
+          print '  Breaking.'
           break
 
-    print 'Removed', removed
+    print 'Removed', removed, small
+    removed.sort()
+    removed.reverse()
     for _r in removed:
       set_of_points.remove(set_of_points[_r])
     print 'Set of points:', set_of_points
@@ -232,7 +245,9 @@ def get_discrete_values():
     #   if valid_rgb(point):
     #     valid_coords_for_discretization.append(tuple(point))
 
-  print 'POINTS', len(accum_points)
+  print 'POINTS', len(accum_points), accum_points
+
+  print sorted(pdist(accum_points))[:10]
   return accum_points
 
   # pd = pdist(points)

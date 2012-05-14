@@ -13,7 +13,7 @@ import sys
 
 def generate_ycc_from_rgb():
   cs = ColorSpace()
-  increment = 24
+  increment = 48
   with open('rgb_ycc.txt', 'w') as fh:
     for red in range(0, 256, increment):
       for green in range(0, 256, increment):
@@ -166,11 +166,13 @@ def main(argv):
   #     print idx, all_values[first], all_values[second], distances[idx]
 
   possible_values = all_values
-  im = Image.new('YCbCr', (8, 8))
+  IMAGE_WIDTH = 8
+  IMAGE_HEIGHT = 8
+  im = Image.new('YCbCr', (IMAGE_WIDTH, IMAGE_HEIGHT))
   pixels = im.load()
   original_vals = []
-  for row in range(0, 8, 2):
-    for col in range(0, 8, 2):
+  for row in range(0, IMAGE_HEIGHT, 2):
+    for col in range(0, IMAGE_WIDTH, 2):
       val = tuple(map(int, random.choice(possible_values)))
       original_vals.append(val)
       print 'Written:', val
@@ -180,12 +182,15 @@ def main(argv):
       pixels[row + 1, col + 1] = val
   original_vals.reverse()
 
-  im.save('test.jpg', quality=75)
+  QUALITY = 75
+  im.save('test.jpg', quality = QUALITY)
+
+  print 'ALL VALUES', all_values
 
   opened_im = Image.open('test.jpg')
   pixels = opened_im.load()
-  for row in range(0, 8, 2):
-    for col in range(0, 8, 2):
+  for row in range(0, IMAGE_HEIGHT, 2):
+    for col in range(0, IMAGE_WIDTH, 2):
       vals = {}
       for idx in range(3):
         val = 0
@@ -195,32 +200,36 @@ def main(argv):
         val += pixels[row + 1, col + 1][idx]
         val /= 4.0
         vals[idx] = val
+
       red = vals[0]
       green = vals[1]
       blue = vals[2]
       extracted = ColorSpace.to_ycc(red, green, blue)
-
+      print ' Extracted', extracted
       _best_val = 1000
       _best_match = ()
-      # print all_values
 
       for vect in all_values:
-        dist = wminkowski(extracted, vect, 2, [20, 1, 1])
+        vect = map(int, map(round, vect))
+        dist = wminkowski(extracted, vect, 2, [5, 1, 1])
+        print extracted, vect, dist
         if dist < _best_val:
           _best_val = dist
           _best_match = vect
-
+      print ' Best Val', _best_val, _best_match
       _orig = list(original_vals.pop())
       _best_match = map(int, _best_match) # map(int, _min_vect)
 
       if _orig != _best_match:
-        _mismatch_print = 'Mismatch:\n'
-        _mismatch_print += '  original = (%3d, %3d, %3d)\n' % tuple(_orig)
-        _mismatch_print += '  closest = (%3d, %3d, %3d)\n' % tuple(_best_match)
+        _mismatch_print = 'Mismatch at (%3d, %3d):\n' % (row, col)
+        orig_extracted_dist = wminkowski(_orig, extracted, 2, [5, 1, 1])
+        _mismatch_print += '  original  = (%3d, %3d, %3d) %6.2f\n' % tuple(_orig + [orig_extracted_dist])
+        best_match_dist = wminkowski(_orig, _best_match, 2, [5, 1, 1])
+        _mismatch_print += '  closest   = (%3d, %3d, %3d) %6.2f\n' % tuple(_best_match + [best_match_dist])
         _mismatch_print += '  extracted = (%3d, %3d, %3d)\n' % tuple(map(int, map(round, extracted)))
 
         print _mismatch_print
-        print >>sys.stderr, _mismatch_print
+        # print >>sys.stderr, _mismatch_print
 
 
 if __name__ == '__main__':
